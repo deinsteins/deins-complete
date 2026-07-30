@@ -1,11 +1,11 @@
 api.deinscomplete.web.id {
-	encode zstd gzip
 	handle /v1/completions/stream {
 		reverse_proxy api:8080 {
 			flush_interval -1
 		}
 	}
 	handle {
+		encode zstd gzip
 		reverse_proxy api:8080
 	}
 }
