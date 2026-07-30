@@ -37,6 +37,7 @@ type Config struct {
 	UsageQuota  UsageQuotaConfig
 	Router      RouterConfig
 	Streaming   bool
+	Redis       RedisConfig
 }
 type RouterConfig struct {
 	FallbackEnabled bool
@@ -58,6 +59,13 @@ type AuthConfig struct {
 	Secret   string
 	Version  int
 	TokenTTL time.Duration
+}
+type RedisConfig struct {
+	Enabled                                   bool
+	Addr, Username, Password                  string
+	DB                                        int
+	TLS                                       bool
+	ConnectTimeout, ReadTimeout, WriteTimeout time.Duration
 }
 
 func Load() (Config, error) {
@@ -86,6 +94,10 @@ func parse(lookup func(string) string) (Config, error) {
 		UsageQuota: UsageQuotaConfig{Enabled: lookup("USAGE_QUOTA_ENABLED") == "true", DailyRequests: 2000},
 		Router:     RouterConfig{FallbackEnabled: lookup("AI_FALLBACK_ENABLED") == "true", MaxAttempts: 2, Timeout: 8 * time.Second},
 		Streaming:  lookup("STREAMING_ENABLED") == "true",
+		Redis:      RedisConfig{Enabled: lookup("REDIS_ENABLED") == "true", Addr: lookup("REDIS_ADDR"), Username: lookup("REDIS_USERNAME"), Password: lookup("REDIS_PASSWORD"), TLS: lookup("REDIS_TLS_ENABLED") == "true", ConnectTimeout: 2 * time.Second, ReadTimeout: time.Second, WriteTimeout: time.Second},
+	}
+	if config.Redis.Enabled && config.Redis.Addr == "" {
+		return Config{}, fmt.Errorf("REDIS_ADDR is required when REDIS_ENABLED=true")
 	}
 
 	if rawPort := lookup("PORT"); rawPort != "" {

@@ -1,0 +1,9 @@
+services:
+  redis:
+    image: redis:7-alpine
+    profiles: [self-hosted-redis]
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes: [redis_data:/data]
+    networks: [deinscomplete]
+volumes:
+  redis_data:
