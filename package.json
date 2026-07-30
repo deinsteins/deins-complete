@@ -1,0 +1,43 @@
+{
+  "name": "deinscomplete",
+  "displayName": "DeinsComplete",
+  "description": "Fast AI-powered inline code completion for VS Code.",
+  "version": "0.0.1",
+  "publisher": "deinscomplete",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": ["Other"],
+  "activationEvents": ["onStartupFinished"],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      { "command": "deinscomplete.enable", "title": "DeinsComplete: Enable" },
+      { "command": "deinscomplete.disable", "title": "DeinsComplete: Disable" },
+      { "command": "deinscomplete.showLogs", "title": "DeinsComplete: Show Logs" }
+    ],
+    "configuration": {
+      "title": "DeinsComplete",
+      "properties": {
+        "deinscomplete.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable DeinsComplete AI code completion."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "compile": "tsc -p .",
+    "lint": "eslint src test --ext .ts",
+    "test": "npm run compile && node --test out/test/**/*.test.js"
+  },
+  "devDependencies": {
+    "@types/node": "^20.12.0",
+    "@types/vscode": "^1.85.0",
+    "@typescript-eslint/eslint-plugin": "^7.7.0",
+    "@typescript-eslint/parser": "^7.7.0",
+    "eslint": "^8.57.0",
+    "typescript": "^5.4.0"
+  }
+}
