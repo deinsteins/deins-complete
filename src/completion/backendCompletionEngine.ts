@@ -11,6 +11,7 @@ export class BackendCompletionEngine implements CompletionEngine {
     private readonly logger: ApiLogger,
     private readonly ensureAuthentication?: (signal: AbortSignal) => Promise<void>,
     private readonly refreshAuthentication?: (signal: AbortSignal) => Promise<void>,
+    private readonly onQuotaExceeded?: () => void,
   ) {}
 
   async complete(request: CompletionRequest, signal: AbortSignal): Promise<CompletionResult | null> {
@@ -40,6 +41,7 @@ export class BackendCompletionEngine implements CompletionEngine {
       }
       if (error instanceof RateLimitError || error instanceof QuotaExceededError) {
         this.logger.debug(error instanceof QuotaExceededError ? "Backend daily quota exceeded" : "Backend completion rate limited");
+        if (error instanceof QuotaExceededError) this.onQuotaExceeded?.();
         return null;
       }
       const requestId = error instanceof ApiError && error.requestId ? ` requestId=${error.requestId}` : "";

@@ -34,7 +34,10 @@ export function activate(context: vscode.ExtensionContext): void {
       await authenticate(signal);
     };
     void authenticate(new AbortController().signal).catch(() => logger.debug("Installation registration deferred"));
-    const engine = new BackendCompletionEngine(backendClient, extensionVersion, logger, authenticate, refreshAuthentication);
+    let quotaNotified = false;
+    const engine = new BackendCompletionEngine(backendClient, extensionVersion, logger, authenticate, refreshAuthentication, () => {
+      if (!quotaNotified) { quotaNotified = true; void vscode.window.showWarningMessage("DeinsComplete daily completion limit reached."); }
+    });
     const requests = new RequestManager(engine, config);
     const completionProvider = new DeinsCompleteInlineCompletionProvider(lifecycle, new ContextBuilder(config, undefined, getSafeFilePath), requests, logger);
     statusBar.update(lifecycle.getState());
