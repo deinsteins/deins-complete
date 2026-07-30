@@ -51,6 +51,14 @@
       {
         "command": "deinscomplete.showCompletionStats",
         "title": "DeinsComplete: Show Completion Stats"
+      },
+      {
+        "command": "deinscomplete.feedbackHelpful",
+        "title": "DeinsComplete: Mark Last Suggestion Helpful"
+      },
+      {
+        "command": "deinscomplete.feedbackNotHelpful",
+        "title": "DeinsComplete: Mark Last Suggestion Not Helpful"
       }
     ],
     "configuration": {

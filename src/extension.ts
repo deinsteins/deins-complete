@@ -14,6 +14,7 @@ import { getSafeFilePath } from "./utils/safeFilePath";
 import { CredentialStore } from "./security/credentialStore";
 import { getInstallationId } from "./identity/installationIdentity";
 import { InstallationService } from "./identity/installationService";
+import { FeedbackService } from "./feedback/feedbackService";
 
 export function activate(context: vscode.ExtensionContext): void {
   const logger = new Logger();
@@ -41,6 +42,7 @@ export function activate(context: vscode.ExtensionContext): void {
     }, () => config.streamingEnabled());
     const requests = new RequestManager(engine, config);
     const repositoryContext = new RepositoryContextBuilder(config);
+    const feedback = new FeedbackService();
     const completionProvider = new DeinsCompleteInlineCompletionProvider(lifecycle, new ContextBuilder(config, undefined, getSafeFilePath), repositoryContext, requests, logger);
     statusBar.update(lifecycle.getState());
 
@@ -52,7 +54,7 @@ export function activate(context: vscode.ExtensionContext): void {
       vscode.workspace.onDidChangeTextDocument((event) => repositoryContext.invalidate(event.document.uri)),
       vscode.window.onDidChangeActiveTextEditor((editor) => { if (editor !== undefined) repositoryContext.record(editor.document); }),
       vscode.languages.registerInlineCompletionItemProvider({ scheme: "file" }, completionProvider),
-      ...registerCommands(config, lifecycle, logger, backendClient, requests, installation, repositoryContext, engine),
+      ...registerCommands(config, lifecycle, logger, backendClient, requests, installation, repositoryContext, engine, feedback),
     );
     logger.info("DeinsComplete activated.");
   } catch (error) {
