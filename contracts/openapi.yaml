@@ -49,6 +49,11 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
         '405': { $ref: '#/components/responses/MethodNotAllowed' }
         '413': { $ref: '#/components/responses/InvalidRequest' }
+        '429':
+          description: Completion rate limit or daily quota exceeded. `error.code` is `RATE_LIMITED` or `QUOTA_EXCEEDED`.
+          headers:
+            Retry-After: { schema: { type: integer, minimum: 1 }, description: Seconds until a retry may be attempted. }
+          content: { application/json: { schema: { $ref: '#/components/schemas/ApiErrorResponse' } } }
         '500': { $ref: '#/components/responses/InternalError' }
         '502': { $ref: '#/components/responses/ProviderUnavailable' }
         '503': { $ref: '#/components/responses/ProviderUnavailable' }

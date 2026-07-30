@@ -56,3 +56,15 @@ AUTH_TOKEN_VERSION=1
 ```
 
 Use a high-entropy secret of at least 32 bytes (for example, `openssl rand -hex 32`). `AUTH_TOKEN_TTL_HOURS=0` disables expiry. Production refuses to start with authentication disabled. The installation ID is random and is not derived from a user, device, or workspace.
+
+## Admission controls
+
+Rate limiting and daily request quotas are backend-only, keyed by installation ID. Their in-memory state resets on process restart; daily quota boundaries are midnight UTC.
+
+```env
+RATE_LIMIT_ENABLED=true
+RATE_LIMIT_REQUESTS_PER_MINUTE=60
+RATE_LIMIT_BURST=10
+USAGE_QUOTA_ENABLED=true
+USAGE_QUOTA_DAILY_REQUESTS=2000
+```

@@ -1,4 +1,4 @@
-import { ApiError, CancelledError, TimeoutError, UnauthorizedError } from "../api/apiErrors";
+import { ApiError, CancelledError, QuotaExceededError, RateLimitError, TimeoutError, UnauthorizedError } from "../api/apiErrors";
 import { ApiCompletionRequest, ApiLogger } from "../api/apiTypes";
 import { BackendClient } from "../api/deinsCompleteClient";
 import { CompletionEngine } from "./completionEngine";
@@ -36,6 +36,10 @@ export class BackendCompletionEngine implements CompletionEngine {
       }
       if (error instanceof TimeoutError) {
         this.logger.debug("Backend completion timed out");
+        return null;
+      }
+      if (error instanceof RateLimitError || error instanceof QuotaExceededError) {
+        this.logger.debug(error instanceof QuotaExceededError ? "Backend daily quota exceeded" : "Backend completion rate limited");
         return null;
       }
       const requestId = error instanceof ApiError && error.requestId ? ` requestId=${error.requestId}` : "";

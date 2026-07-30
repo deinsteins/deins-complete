@@ -10,6 +10,8 @@ import (
 	"deinscomplete/api/internal/auth"
 	"deinscomplete/api/internal/completion"
 	"deinscomplete/api/internal/config"
+	"deinscomplete/api/internal/ratelimit"
+	"deinscomplete/api/internal/usage"
 )
 
 type Server struct {
@@ -19,11 +21,23 @@ type Server struct {
 func New(configuration config.Config, logger *slog.Logger, service *completion.Service) *Server {
 	return &Server{httpServer: &http.Server{
 		Addr:              fmt.Sprintf("%s:%d", configuration.Host, configuration.Port),
-		Handler:           newRouter(logger, service, auth.New(configuration.Auth.Secret, configuration.Auth.Version, configuration.Auth.TokenTTL), configuration.Auth.Enabled),
+		Handler:           newRouter(logger, service, auth.New(configuration.Auth.Secret, configuration.Auth.Version, configuration.Auth.TokenTTL), configuration.Auth.Enabled, rateLimit(configuration), quota(configuration)),
 		ReadHeaderTimeout: 5 * time.Second,
 		IdleTimeout:       60 * time.Second,
 		MaxHeaderBytes:    1 << 20,
 	}}
+}
+func rateLimit(c config.Config) ratelimit.Limiter {
+	if !c.RateLimit.Enabled {
+		return nil
+	}
+	return ratelimit.New(c.RateLimit.RequestsPerMinute, c.RateLimit.Burst)
+}
+func quota(c config.Config) usage.Tracker {
+	if !c.UsageQuota.Enabled {
+		return nil
+	}
+	return usage.New(c.UsageQuota.DailyRequests)
 }
 
 func (server *Server) ListenAndServe() error              { return server.httpServer.ListenAndServe() }

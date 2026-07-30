@@ -1,5 +1,5 @@
 export class ApiError extends Error {
-  constructor(message: string, readonly requestId?: string, readonly status?: number) {
+  constructor(message: string, readonly requestId?: string, readonly status?: number, readonly retryAfterSeconds?: number) {
     super(message);
     this.name = new.target.name;
   }
@@ -16,4 +16,5 @@ export class ForbiddenError extends ApiError {}
 export class EndpointNotFoundError extends ApiError {}
 export class PayloadTooLargeError extends ApiError {}
 export class RateLimitError extends ApiError {}
+export class QuotaExceededError extends ApiError {}
 export class BackendUnavailableError extends ApiError {}

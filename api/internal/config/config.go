@@ -30,6 +30,17 @@ type Config struct {
 	LogLevel    string
 	AI          AIConfig
 	Auth        AuthConfig
+	RateLimit   RateLimitConfig
+	UsageQuota  UsageQuotaConfig
+}
+type RateLimitConfig struct {
+	Enabled           bool
+	RequestsPerMinute int
+	Burst             int
+}
+type UsageQuotaConfig struct {
+	Enabled       bool
+	DailyRequests int
 }
 type AuthConfig struct {
 	Enabled  bool
@@ -57,7 +68,9 @@ func parse(lookup func(string) string) (Config, error) {
 			Temperature:        0.1,
 			MaxCompletionLines: 20, MaxCompletionChars: 8000,
 		},
-		Auth: AuthConfig{Enabled: lookup("AUTH_ENABLED") == "true", Secret: lookup("AUTH_TOKEN_SECRET"), Version: 1},
+		Auth:       AuthConfig{Enabled: lookup("AUTH_ENABLED") == "true", Secret: lookup("AUTH_TOKEN_SECRET"), Version: 1},
+		RateLimit:  RateLimitConfig{Enabled: lookup("RATE_LIMIT_ENABLED") == "true", RequestsPerMinute: 60, Burst: 10},
+		UsageQuota: UsageQuotaConfig{Enabled: lookup("USAGE_QUOTA_ENABLED") == "true", DailyRequests: 2000},
 	}
 
 	if rawPort := lookup("PORT"); rawPort != "" {
@@ -96,10 +109,37 @@ func parse(lookup func(string) string) (Config, error) {
 	if config.Auth.Enabled && len(config.Auth.Secret) < 32 {
 		return Config{}, fmt.Errorf("AUTH_TOKEN_SECRET must be at least 32 bytes when auth is enabled")
 	}
+	if err := parseAdmissionConfig(&config, lookup); err != nil {
+		return Config{}, err
+	}
 	if err := parseAIConfig(&config.AI, config.Environment, lookup); err != nil {
 		return Config{}, err
 	}
 	return config, nil
+}
+func parseAdmissionConfig(c *Config, lookup func(string) string) error {
+	if raw := lookup("RATE_LIMIT_REQUESTS_PER_MINUTE"); raw != "" {
+		v, e := strconv.Atoi(raw)
+		if e != nil || v < 1 || v > 10000 {
+			return fmt.Errorf("invalid RATE_LIMIT_REQUESTS_PER_MINUTE value: %s", raw)
+		}
+		c.RateLimit.RequestsPerMinute = v
+	}
+	if raw := lookup("RATE_LIMIT_BURST"); raw != "" {
+		v, e := strconv.Atoi(raw)
+		if e != nil || v < 1 || v > 1000 {
+			return fmt.Errorf("invalid RATE_LIMIT_BURST value: %s", raw)
+		}
+		c.RateLimit.Burst = v
+	}
+	if raw := lookup("USAGE_QUOTA_DAILY_REQUESTS"); raw != "" {
+		v, e := strconv.Atoi(raw)
+		if e != nil || v < 1 || v > 1000000 {
+			return fmt.Errorf("invalid USAGE_QUOTA_DAILY_REQUESTS value: %s", raw)
+		}
+		c.UsageQuota.DailyRequests = v
+	}
+	return nil
 }
 
 func parseAIConfig(config *AIConfig, environment string, lookup func(string) string) error {

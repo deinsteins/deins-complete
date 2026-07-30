@@ -11,9 +11,11 @@ import (
 	"deinscomplete/api/internal/http/handlers"
 	"deinscomplete/api/internal/http/middleware"
 	"deinscomplete/api/internal/http/response"
+	"deinscomplete/api/internal/ratelimit"
+	"deinscomplete/api/internal/usage"
 )
 
-func newRouter(logger *slog.Logger, service *completion.Service, authService *auth.Service, enabled bool) http.Handler {
+func newRouter(logger *slog.Logger, service *completion.Service, authService *auth.Service, enabled bool, limiter ratelimit.Limiter, tracker usage.Tracker) http.Handler {
 	router := chi.NewRouter()
 	router.Use(middleware.RequestID, middleware.Recovery(logger), middleware.Logging(logger))
 	router.Get("/", handlers.Root)
@@ -22,6 +24,12 @@ func newRouter(logger *slog.Logger, service *completion.Service, authService *au
 	router.Post("/v1/installations/register", handlers.RegisterInstallations(authService))
 	completionHandler := http.Handler(handlers.NewCompletionHandler(service, logger))
 	if enabled {
+		if tracker != nil {
+			completionHandler = middleware.Quota(tracker)(completionHandler)
+		}
+		if limiter != nil {
+			completionHandler = middleware.RateLimit(limiter)(completionHandler)
+		}
 		completionHandler = middleware.Auth(authService)(completionHandler)
 	}
 	router.Post("/v1/completions", completionHandler.ServeHTTP)

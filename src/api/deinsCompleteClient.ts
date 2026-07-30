@@ -16,6 +16,7 @@ import {
   InvalidResponseError,
   NetworkError,
   PayloadTooLargeError,
+  QuotaExceededError,
   RateLimitError,
   TimeoutError,
   UnauthorizedError,
@@ -31,6 +32,7 @@ type FetchFunction = (input: string, init?: RequestInit) => Promise<Response>;
 
 export class DeinsCompleteClient implements BackendClient {
   private token?: string;
+  private unavailableUntil = 0;
   constructor(
     private readonly settings: BackendSettingsProvider,
     private readonly fetchFunction: FetchFunction = globalThis.fetch,
@@ -39,6 +41,7 @@ export class DeinsCompleteClient implements BackendClient {
   ) {}
 
   async complete(request: ApiCompletionRequest, signal: AbortSignal): Promise<ApiCompletionResponse> {
+    if (Date.now() < this.unavailableUntil) throw new RateLimitError("Backend completion is cooling down.");
     const startedAt = Date.now();
     const response = await this.send("/v1/completions", {
       method: "POST",
@@ -78,7 +81,9 @@ export class DeinsCompleteClient implements BackendClient {
     try {
       const response = await this.fetchFunction(`${backendUrl}${path}`, { ...init, signal: cancellation.signal });
       if (!response.ok) {
-        throw statusError(response.status, this.requestId(response));
+        const error = await statusError(response, this.requestId(response));
+        if (error instanceof RateLimitError || error instanceof QuotaExceededError) this.unavailableUntil = Date.now() + (error.retryAfterSeconds ?? 1) * 1000;
+        throw error;
       }
       return response;
     } catch (error) {
@@ -147,14 +152,19 @@ function createRequestCancellation(source: AbortSignal | undefined, timeoutMs: n
   };
 }
 
-function statusError(status: number, requestId?: string): Error {
+async function statusError(response: Response, requestId?: string): Promise<Error> {
+  const status = response.status;
+  const retry = Number(response.headers.get("Retry-After"));
+  const retryAfter = Number.isFinite(retry) && retry > 0 ? retry : undefined;
+  let code = "";
+  try { const body = await response.clone().json() as { error?: { code?: string } }; code = body.error?.code ?? ""; } catch { /* status fallback */ }
   switch (status) {
     case 400: return new InvalidRequestError("Backend rejected the completion request.", requestId, status);
     case 401: return new UnauthorizedError("Backend authorization failed.", requestId, status);
     case 403: return new ForbiddenError("Backend request was forbidden.", requestId, status);
     case 404: return new EndpointNotFoundError("Backend completion endpoint was not found.", requestId, status);
     case 413: return new PayloadTooLargeError("Backend rejected the completion payload.", requestId, status);
-    case 429: return new RateLimitError("Backend is rate limited.", requestId, status);
+    case 429: return code === "QUOTA_EXCEEDED" ? new QuotaExceededError("Daily completion quota exceeded.", requestId, status, retryAfter) : new RateLimitError("Backend is rate limited.", requestId, status, retryAfter);
     default: return new BackendUnavailableError("Backend completion request failed.", requestId, status);
   }
 }
