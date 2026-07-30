@@ -12,6 +12,19 @@ type ChatCompletionRequest struct {
 	MaxTokens   int       `json:"max_tokens"`
 	Stream      bool      `json:"stream"`
 }
+type CompletionRequest struct {
+	Model       string   `json:"model"`
+	Prompt      string   `json:"prompt"`
+	Temperature float64  `json:"temperature"`
+	MaxTokens   int      `json:"max_tokens"`
+	Stop        []string `json:"stop,omitempty"`
+}
+type completionResponse struct {
+	Choices []struct {
+		Text         string `json:"text"`
+		FinishReason string `json:"finish_reason"`
+	} `json:"choices"`
+}
 
 type chatCompletionResponse struct {
 	Choices []struct {

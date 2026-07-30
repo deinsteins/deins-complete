@@ -81,3 +81,18 @@ AI_ROUTER_TIMEOUT_MS=8000
 ```
 
 Provider targets and routing remain invisible to VS Code users.
+
+## FIM-aware completion
+
+Targets default to chat prompting. An OpenAI-compatible raw-completion target may use native FIM only when configured server-side with explicit tokens:
+
+```env
+AI_COMPLETION_MODE=fim
+AI_API_MODE=completion
+AI_FIM_PREFIX_TOKEN=
+AI_FIM_SUFFIX_TOKEN=
+AI_FIM_MIDDLE_TOKEN=
+AI_FIM_END_TOKEN=
+```
+
+FIM token values are model-specific and must be supplied by the backend operator; they are never exposed to extension users.

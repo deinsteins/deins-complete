@@ -6,18 +6,7 @@ import (
 	"deinscomplete/api/internal/completion"
 )
 
-const systemInstruction = `You are a code completion engine.
-
-Generate only the code that should be inserted at the cursor.
-
-Rules:
-- Return code only.
-- Do not explain.
-- Do not use markdown.
-- Do not repeat existing surrounding code.
-- Continue naturally from the prefix.
-- Respect the suffix.
-- Prefer the smallest useful completion.`
+const systemInstruction = `Complete code at the cursor. Return only inserted code. Do not repeat prefix or suffix. Do not explain.`
 
 func BuildMessages(request completion.Request) []Message {
 	return []Message{

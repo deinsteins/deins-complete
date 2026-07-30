@@ -13,20 +13,23 @@ import (
 	"time"
 
 	"deinscomplete/api/internal/completion"
+	"deinscomplete/api/internal/completion/fim"
 	"deinscomplete/api/internal/config"
 )
 
 const maxProviderResponseBytes = 1 << 20
 
 type Provider struct {
-	baseURL     string
-	apiKey      string
-	model       string
-	timeout     time.Duration
-	maxTokens   int
-	temperature float64
-	client      *http.Client
-	logger      *slog.Logger
+	baseURL                 string
+	apiKey                  string
+	model                   string
+	timeout                 time.Duration
+	maxTokens               int
+	temperature             float64
+	apiMode, completionMode string
+	fim                     fim.Config
+	client                  *http.Client
+	logger                  *slog.Logger
 }
 
 func New(configuration config.AIConfig, logger *slog.Logger) (*Provider, error) {
@@ -41,11 +44,15 @@ func New(configuration config.AIConfig, logger *slog.Logger) (*Provider, error) 
 	return &Provider{
 		baseURL: baseURL, apiKey: configuration.OpenAI.APIKey, model: configuration.OpenAI.Model,
 		timeout: configuration.Timeout, maxTokens: configuration.MaxTokens, temperature: configuration.Temperature,
+		apiMode: configuration.APIMode, completionMode: configuration.CompletionMode, fim: fim.Config{PrefixToken: configuration.FIMPrefixToken, SuffixToken: configuration.FIMSuffixToken, MiddleToken: configuration.FIMMiddleToken, EndToken: configuration.FIMEndToken},
 		client: &http.Client{Transport: transport}, logger: logger,
 	}, nil
 }
 
 func (provider *Provider) Complete(ctx context.Context, request completion.Request) (completion.Result, error) {
+	if provider.apiMode == "completion" {
+		return provider.completeRaw(ctx, request)
+	}
 	ctx, cancel := context.WithTimeout(ctx, provider.timeout)
 	defer cancel()
 	startedAt := time.Now()
@@ -93,6 +100,44 @@ func (provider *Provider) Complete(ctx context.Context, request completion.Reque
 	}
 	provider.logger.Debug("provider request completed", "provider", "openai-compatible", "model", provider.model, "duration_ms", time.Since(startedAt).Milliseconds())
 	return result, nil
+}
+
+func (provider *Provider) completeRaw(ctx context.Context, request completion.Request) (completion.Result, error) {
+	ctx, cancel := context.WithTimeout(ctx, provider.timeout)
+	defer cancel()
+	prompt := fim.Format(request, provider.fim)
+	body, err := json.Marshal(CompletionRequest{Model: provider.model, Prompt: prompt, Temperature: provider.temperature, MaxTokens: provider.maxTokens})
+	if err != nil {
+		return completion.Result{}, completion.NewProviderError(completion.ProviderInvalidResponse, err)
+	}
+	httpRequest, err := http.NewRequestWithContext(ctx, http.MethodPost, provider.baseURL+"/completions", bytes.NewReader(body))
+	if err != nil {
+		return completion.Result{}, completion.NewProviderError(completion.ProviderInvalidResponse, err)
+	}
+	httpRequest.Header.Set("Authorization", "Bearer "+provider.apiKey)
+	httpRequest.Header.Set("Content-Type", "application/json")
+	response, err := provider.client.Do(httpRequest)
+	if err != nil {
+		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+			return completion.Result{}, completion.NewProviderError(completion.ProviderTimeout, err)
+		}
+		if errors.Is(ctx.Err(), context.Canceled) {
+			return completion.Result{}, ctx.Err()
+		}
+		return completion.Result{}, completion.NewProviderError(completion.ProviderUnavailable, err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode < 200 || response.StatusCode >= 300 {
+		return completion.Result{}, statusError(response.StatusCode)
+	}
+	var payload completionResponse
+	if err := json.NewDecoder(io.LimitReader(response.Body, maxProviderResponseBytes)).Decode(&payload); err != nil {
+		return completion.Result{}, completion.NewProviderError(completion.ProviderInvalidResponse, err)
+	}
+	if len(payload.Choices) == 0 {
+		return completion.Result{}, nil
+	}
+	return completion.Result{Text: fim.StripEnd(payload.Choices[0].Text, provider.fim.EndToken), FinishReason: payload.Choices[0].FinishReason}, nil
 }
 
 func normalizeBaseURL(value string) (string, error) {

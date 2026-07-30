@@ -10,14 +10,17 @@ import (
 )
 
 type AIConfig struct {
-	Provider           string
-	Timeout            time.Duration
-	MaxTokens          int
-	Temperature        float64
-	MaxCompletionLines int
-	MaxCompletionChars int
-	OpenAI             OpenAIConfig
-	Anthropic          AnthropicConfig
+	Provider                                                    string
+	CompletionMode                                              string
+	APIMode                                                     string
+	FIMPrefixToken, FIMSuffixToken, FIMMiddleToken, FIMEndToken string
+	Timeout                                                     time.Duration
+	MaxTokens                                                   int
+	Temperature                                                 float64
+	MaxCompletionLines                                          int
+	MaxCompletionChars                                          int
+	OpenAI                                                      OpenAIConfig
+	Anthropic                                                   AnthropicConfig
 }
 
 type OpenAIConfig struct{ BaseURL, APIKey, Model string }
@@ -67,7 +70,9 @@ func parse(lookup func(string) string) (Config, error) {
 		LogLevel:    valueOrDefault(lookup("LOG_LEVEL"), "info"),
 		Port:        3001,
 		AI: AIConfig{
-			Provider:           valueOrDefault(lookup("AI_PROVIDER"), "mock"),
+			Provider:       valueOrDefault(lookup("AI_PROVIDER"), "mock"),
+			CompletionMode: valueOrDefault(lookup("AI_COMPLETION_MODE"), "chat"), APIMode: valueOrDefault(lookup("AI_API_MODE"), "chat"),
+			FIMPrefixToken: lookup("AI_FIM_PREFIX_TOKEN"), FIMSuffixToken: lookup("AI_FIM_SUFFIX_TOKEN"), FIMMiddleToken: lookup("AI_FIM_MIDDLE_TOKEN"), FIMEndToken: lookup("AI_FIM_END_TOKEN"),
 			OpenAI:             OpenAIConfig{BaseURL: lookup("AI_BASE_URL"), APIKey: lookup("AI_API_KEY"), Model: lookup("AI_MODEL")},
 			Anthropic:          AnthropicConfig{BaseURL: lookup("ANTHROPIC_BASE_URL"), APIKey: lookup("ANTHROPIC_API_KEY"), Model: lookup("ANTHROPIC_MODEL"), Version: lookup("ANTHROPIC_VERSION")},
 			Timeout:            10 * time.Second,
@@ -146,7 +151,7 @@ func parseRouterConfig(c *Config, lookup func(string) string) error {
 	if !c.Router.FallbackEnabled {
 		return nil
 	}
-	c.Router.Fallback = AIConfig{Provider: lookup("AI_FALLBACK_PROVIDER"), Timeout: c.AI.Timeout, MaxTokens: c.AI.MaxTokens, Temperature: c.AI.Temperature, OpenAI: OpenAIConfig{BaseURL: lookup("AI_FALLBACK_BASE_URL"), APIKey: lookup("AI_FALLBACK_API_KEY"), Model: lookup("AI_FALLBACK_MODEL")}, Anthropic: AnthropicConfig{BaseURL: lookup("AI_FALLBACK_BASE_URL"), APIKey: lookup("AI_FALLBACK_API_KEY"), Model: lookup("AI_FALLBACK_MODEL"), Version: lookup("AI_FALLBACK_VERSION")}}
+	c.Router.Fallback = AIConfig{Provider: lookup("AI_FALLBACK_PROVIDER"), CompletionMode: valueOrDefault(lookup("AI_FALLBACK_COMPLETION_MODE"), "chat"), APIMode: valueOrDefault(lookup("AI_FALLBACK_API_MODE"), "chat"), FIMPrefixToken: lookup("AI_FALLBACK_FIM_PREFIX_TOKEN"), FIMSuffixToken: lookup("AI_FALLBACK_FIM_SUFFIX_TOKEN"), FIMMiddleToken: lookup("AI_FALLBACK_FIM_MIDDLE_TOKEN"), FIMEndToken: lookup("AI_FALLBACK_FIM_END_TOKEN"), Timeout: c.AI.Timeout, MaxTokens: c.AI.MaxTokens, Temperature: c.AI.Temperature, OpenAI: OpenAIConfig{BaseURL: lookup("AI_FALLBACK_BASE_URL"), APIKey: lookup("AI_FALLBACK_API_KEY"), Model: lookup("AI_FALLBACK_MODEL")}, Anthropic: AnthropicConfig{BaseURL: lookup("AI_FALLBACK_BASE_URL"), APIKey: lookup("AI_FALLBACK_API_KEY"), Model: lookup("AI_FALLBACK_MODEL"), Version: lookup("AI_FALLBACK_VERSION")}}
 	if c.Router.Fallback.Provider == "" {
 		return fmt.Errorf("AI_FALLBACK_PROVIDER is required when fallback is enabled")
 	}
@@ -198,6 +203,21 @@ func parseAdmissionConfig(c *Config, lookup func(string) string) error {
 }
 
 func parseAIConfig(config *AIConfig, environment string, lookup func(string) string) error {
+	if config.CompletionMode != "chat" && config.CompletionMode != "fim" {
+		return fmt.Errorf("invalid AI_COMPLETION_MODE: %s", config.CompletionMode)
+	}
+	if config.APIMode != "chat" && config.APIMode != "completion" {
+		return fmt.Errorf("invalid AI_API_MODE: %s", config.APIMode)
+	}
+	if config.CompletionMode == "fim" && (config.FIMPrefixToken == "" || config.FIMSuffixToken == "" || config.FIMMiddleToken == "") {
+		return fmt.Errorf("FIM prefix, suffix, and middle tokens are required")
+	}
+	if config.APIMode == "completion" && config.CompletionMode != "fim" {
+		return fmt.Errorf("completion API mode requires FIM completion mode")
+	}
+	if config.Provider == "anthropic" && config.APIMode != "chat" {
+		return fmt.Errorf("Anthropic supports only chat API mode")
+	}
 	if raw := lookup("AI_TIMEOUT_MS"); raw != "" {
 		milliseconds, err := strconv.Atoi(raw)
 		if err != nil || milliseconds < 1000 || milliseconds > 60000 {
