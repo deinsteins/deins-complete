@@ -6,6 +6,7 @@ import { Logger } from "../logging/logger";
 import { bridgeCancellation } from "../utils/cancellation";
 import { RequestManager } from "./requestManager";
 import { CompletionRequest } from "./completionTypes";
+import { completionRequestMode } from "./contextComplexity";
 import { EditorStateSnapshot, isCurrentEditorState } from "./editorState";
 
 export class DeinsCompleteInlineCompletionProvider implements vscode.InlineCompletionItemProvider {
@@ -30,7 +31,8 @@ export class DeinsCompleteInlineCompletionProvider implements vscode.InlineCompl
     const snapshot = this.getEditorState(document);
     const request: CompletionRequest = this.contextBuilder.build(document, position);
     const cancellation = bridgeCancellation(token);
-    request.repositoryContext = await this.repositoryContextBuilder.build(document, request, cancellation.signal);
+    request.mode = completionRequestMode(request);
+    if (request.mode === "full") request.repositoryContextTask = this.repositoryContextBuilder.build(document, request, cancellation.signal);
     this.logger.debug(`Inline completion requested (language=${request.language}, version=${snapshot.version}, prefixChars=${request.metadata.prefixCharacters}, suffixChars=${request.metadata.suffixCharacters})`);
 
     try {
