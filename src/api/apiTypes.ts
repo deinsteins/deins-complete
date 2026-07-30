@@ -21,6 +21,7 @@ export interface ApiCompletionResponse {
   completion: { text: string };
   metadata?: { requestId?: string };
   requestId?: string;
+  streaming?: { firstChunkMs?: number };
 }
 
 export interface BackendHealthResult {

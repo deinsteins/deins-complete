@@ -5,6 +5,7 @@ import { CompletionEngine } from "./completionEngine";
 import { CompletionRequest, CompletionResult } from "./completionTypes";
 
 export class BackendCompletionEngine implements CompletionEngine {
+  private readonly stats = { streamsStarted: 0, streamsSucceeded: 0, streamsFallback: 0, totalFirstChunkMs: 0, firstChunkSamples: 0 };
   constructor(
     private readonly client: BackendClient,
     private readonly extensionVersion: string,
@@ -50,11 +51,13 @@ export class BackendCompletionEngine implements CompletionEngine {
       return null;
     }
   }
+  getStats() { return { ...this.stats }; }
 
   private async completeRequest(request: CompletionRequest, signal: AbortSignal) {
     const apiRequest = toApiCompletionRequest(request, this.extensionVersion);
     if (this.streamingEnabled() && this.client.streamComplete !== undefined) {
-      try { return await this.client.streamComplete(apiRequest, signal); } catch (error) { if (!(error instanceof EndpointNotFoundError)) throw error; this.logger.debug("Backend streaming unavailable; using standard completion"); }
+      this.stats.streamsStarted++;
+      try { const response = await this.client.streamComplete(apiRequest, signal); this.stats.streamsSucceeded++; if (response.streaming?.firstChunkMs !== undefined) { this.stats.totalFirstChunkMs += response.streaming.firstChunkMs; this.stats.firstChunkSamples++; } return response; } catch (error) { if (!(error instanceof EndpointNotFoundError)) throw error; this.stats.streamsFallback++; this.logger.debug("Backend streaming unavailable; using standard completion"); }
     }
     return this.client.complete(apiRequest, signal);
   }

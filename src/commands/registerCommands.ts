@@ -6,6 +6,7 @@ import { Logger } from "../logging/logger";
 import { RequestManager } from "../completion/requestManager";
 import { InstallationService } from "../identity/installationService";
 import { RepositoryContextBuilder } from "../context/repository/repositoryContextBuilder";
+import { BackendCompletionEngine } from "../completion/backendCompletionEngine";
 
 export function registerCommands(
   config: ConfigService,
@@ -15,6 +16,7 @@ export function registerCommands(
   requests: RequestManager,
   installation: InstallationService,
   repositoryContext: RepositoryContextBuilder,
+  engine: BackendCompletionEngine,
 ): vscode.Disposable[] {
   return [
     vscode.commands.registerCommand("deinscomplete.enable", async () => {
@@ -36,7 +38,8 @@ export function registerCommands(
       const authentication = await installation.getToken() ? "Ready" : "Not registered";
       const average = stats.requested ? Math.round(stats.totalLatencyMs / stats.requested) : 0;
       const repository = repositoryContext.getStats();
-      const report = `DeinsComplete Diagnostics\nStatus: ${lifecycle.getState()}\nBackend: ${backend}\nAuthentication: ${authentication}\nRequests: ${stats.requested}\nCache hits: ${stats.cacheHits}\nCancelled: ${stats.cancelled}\nAverage completion latency: ${average} ms\nRepository Context\nLast files included: ${repository.lastFiles}\nLast chars: ${repository.lastCharacters}\nLast build time: ${repository.lastDurationMs} ms\nTimeouts: ${repository.timedOut}`;
+      const streaming = engine.getStats(); const ttfb = streaming.firstChunkSamples ? Math.round(streaming.totalFirstChunkMs / streaming.firstChunkSamples) : 0;
+      const report = `DeinsComplete Diagnostics\nStatus: ${lifecycle.getState()}\nBackend: ${backend}\nAuthentication: ${authentication}\nRequests: ${stats.requested}\nCache hits: ${stats.cacheHits}\nNegative cache hits: ${stats.negativeCacheHits}\nCancelled: ${stats.cancelled}\nAverage completion latency: ${average} ms\nRepository Context\nLast files included: ${repository.lastFiles}\nLast chars: ${repository.lastCharacters}\nLast build time: ${repository.lastDurationMs} ms\nTimeouts: ${repository.timedOut}\nStreaming\nStarted: ${streaming.streamsStarted}\nSucceeded: ${streaming.streamsSucceeded}\nFallback: ${streaming.streamsFallback}\nAverage first chunk: ${ttfb} ms`;
       logger.info(report); void vscode.window.showInformationMessage(`DeinsComplete diagnostics: ${backend}`);
     }),
     vscode.commands.registerCommand("deinscomplete.resetAuthentication", async () => {

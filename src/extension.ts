@@ -52,7 +52,7 @@ export function activate(context: vscode.ExtensionContext): void {
       vscode.workspace.onDidChangeTextDocument((event) => repositoryContext.invalidate(event.document.uri)),
       vscode.window.onDidChangeActiveTextEditor((editor) => { if (editor !== undefined) repositoryContext.record(editor.document); }),
       vscode.languages.registerInlineCompletionItemProvider({ scheme: "file" }, completionProvider),
-      ...registerCommands(config, lifecycle, logger, backendClient, requests, installation, repositoryContext),
+      ...registerCommands(config, lifecycle, logger, backendClient, requests, installation, repositoryContext, engine),
     );
     logger.info("DeinsComplete activated.");
   } catch (error) {

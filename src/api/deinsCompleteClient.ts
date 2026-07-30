@@ -56,7 +56,7 @@ export class DeinsCompleteClient implements BackendClient {
   async streamComplete(request: ApiCompletionRequest, signal: AbortSignal): Promise<ApiCompletionResponse> {
     const response = await this.send("/v1/completions/stream", { method: "POST", headers: this.headers({ "Content-Type": "application/json", Accept: "text/event-stream" }), body: JSON.stringify(request) }, signal);
     if (response.body === null) throw new InvalidResponseError("Backend stream is unavailable.", this.requestId(response));
-    const reader = response.body.getReader(); const decoder = new TextDecoder(); let buffer = ""; let text = ""; let requestId = this.requestId(response);
+    const startedAt = performance.now(); const reader = response.body.getReader(); const decoder = new TextDecoder(); let buffer = ""; let text = ""; let requestId = this.requestId(response); let firstChunkMs: number | undefined;
     for (;;) {
       const { done, value } = await reader.read(); buffer += decoder.decode(value, { stream: !done });
       const events = buffer.split("\n\n"); buffer = events.pop() ?? "";
@@ -64,9 +64,9 @@ export class DeinsCompleteClient implements BackendClient {
         const type = event.match(/^event:\s*(.+)$/m)?.[1]; const data = event.match(/^data:\s*(.+)$/m)?.[1]; if (data === undefined) continue;
         let payload: unknown; try { payload = JSON.parse(data); } catch { throw new InvalidResponseError("Backend stream event is invalid.", requestId); }
         if (!isRecord(payload)) continue;
-        if (type === "chunk" && typeof payload.text === "string") text += payload.text;
+        if (type === "chunk" && typeof payload.text === "string") { if (firstChunkMs === undefined) firstChunkMs = Math.round(performance.now() - startedAt); text += payload.text; }
         if (type === "error") throw new BackendUnavailableError("Backend stream failed.", requestId);
-        if (type === "done") { if (typeof payload.text === "string") text = payload.text; if (typeof payload.requestId === "string") requestId = payload.requestId; return { completion: { text }, requestId, metadata: { requestId } }; }
+        if (type === "done") { if (typeof payload.text === "string") text = payload.text; if (typeof payload.requestId === "string") requestId = payload.requestId; return { completion: { text }, requestId, metadata: { requestId }, streaming: { firstChunkMs } }; }
       }
       if (done) break;
     }
