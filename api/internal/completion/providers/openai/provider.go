@@ -1,6 +1,7 @@
 package openai
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -100,6 +101,76 @@ func (provider *Provider) Complete(ctx context.Context, request completion.Reque
 	}
 	provider.logger.Debug("provider request completed", "provider", "openai-compatible", "model", provider.model, "duration_ms", time.Since(startedAt).Milliseconds())
 	return result, nil
+}
+
+// StreamComplete consumes the OpenAI-compatible SSE format used by MiMo.
+func (provider *Provider) StreamComplete(ctx context.Context, request completion.Request, onChunk func(string) error) error {
+	if provider.apiMode != "chat" {
+		return completion.NewProviderError(completion.ProviderUnavailable, errors.New("streaming requires chat API mode"))
+	}
+	ctx, cancel := context.WithTimeout(ctx, provider.timeout)
+	defer cancel()
+	body, err := json.Marshal(ChatCompletionRequest{Model: provider.model, Messages: BuildMessages(request), Temperature: provider.temperature, MaxTokens: provider.maxTokens, Stream: true})
+	if err != nil {
+		return completion.NewProviderError(completion.ProviderInvalidResponse, err)
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, provider.baseURL+"/chat/completions", bytes.NewReader(body))
+	if err != nil {
+		return completion.NewProviderError(completion.ProviderInvalidResponse, err)
+	}
+	req.Header.Set("Authorization", "Bearer "+provider.apiKey)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "text/event-stream")
+	response, err := provider.client.Do(req)
+	if err != nil {
+		if errors.Is(ctx.Err(), context.Canceled) {
+			return ctx.Err()
+		}
+		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+			return completion.NewProviderError(completion.ProviderTimeout, err)
+		}
+		return completion.NewProviderError(completion.ProviderUnavailable, err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
+		return statusError(response.StatusCode)
+	}
+	scanner := bufio.NewScanner(io.LimitReader(response.Body, maxProviderResponseBytes))
+	scanner.Buffer(make([]byte, 4096), maxProviderResponseBytes)
+	for scanner.Scan() {
+		line := scanner.Text()
+		if !strings.HasPrefix(line, "data:") {
+			continue
+		}
+		data := strings.TrimSpace(strings.TrimPrefix(line, "data:"))
+		if data == "[DONE]" {
+			return nil
+		}
+		var event struct {
+			Choices []struct {
+				Delta struct {
+					Content string `json:"content"`
+				} `json:"delta"`
+			} `json:"choices"`
+		}
+		if err := json.Unmarshal([]byte(data), &event); err != nil {
+			return completion.NewProviderError(completion.ProviderInvalidResponse, err)
+		}
+		for _, choice := range event.Choices {
+			if choice.Delta.Content != "" {
+				if err := onChunk(choice.Delta.Content); err != nil {
+					return err
+				}
+			}
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		if errors.Is(ctx.Err(), context.Canceled) {
+			return ctx.Err()
+		}
+		return completion.NewProviderError(completion.ProviderInvalidResponse, err)
+	}
+	return nil
 }
 
 func (provider *Provider) completeRaw(ctx context.Context, request completion.Request) (completion.Result, error) {

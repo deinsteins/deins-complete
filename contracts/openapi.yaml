@@ -58,6 +58,24 @@ paths:
         '502': { $ref: '#/components/responses/ProviderUnavailable' }
         '503': { $ref: '#/components/responses/ProviderUnavailable' }
         '504': { $ref: '#/components/responses/ProviderTimeout' }
+  /v1/completions/stream:
+    post:
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CompletionRequest' }
+      responses:
+        '200':
+          description: Server-Sent Events. See docs/streaming-protocol.md.
+          content:
+            text/event-stream:
+              schema: { type: string }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/InvalidRequest' }
+        '429': { $ref: '#/components/responses/InvalidRequest' }
 components:
   schemas:
     InstallationIdentity:

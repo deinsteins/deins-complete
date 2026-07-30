@@ -47,6 +47,44 @@ func (r *Static) Complete(ctx context.Context, req completion.Request) (completi
 	}
 	return completion.Result{}, last
 }
+func (r *Static) StreamComplete(ctx context.Context, req completion.Request, onChunk func(string) error) error {
+	ctx, cancel := context.WithTimeout(ctx, r.timeout)
+	defer cancel()
+	var last error
+	for i, target := range r.targets {
+		if i >= r.max || ctx.Err() != nil {
+			break
+		}
+		emitted := false
+		if stream, ok := target.Provider.(completion.StreamingProvider); ok {
+			err := stream.StreamComplete(ctx, req, func(chunk string) error { emitted = emitted || chunk != ""; return onChunk(chunk) })
+			if err == nil {
+				return nil
+			}
+			if emitted || errors.Is(err, context.Canceled) {
+				return err
+			}
+			last = err
+		} else {
+			result, err := target.Provider.Complete(ctx, req)
+			if err == nil {
+				if result.Text != "" {
+					return onChunk(result.Text)
+				}
+				return nil
+			}
+			last = err
+		}
+		providerError, ok := completion.AsProviderError(last)
+		if !ok || !eligible(providerError.Kind) {
+			return last
+		}
+	}
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+	return last
+}
 func eligible(k completion.ProviderErrorKind) bool {
 	return k == completion.ProviderAuthentication || k == completion.ProviderRateLimit || k == completion.ProviderTimeout || k == completion.ProviderUnavailable || k == completion.ProviderInvalidResponse
 }

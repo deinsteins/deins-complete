@@ -36,6 +36,7 @@ type Config struct {
 	RateLimit   RateLimitConfig
 	UsageQuota  UsageQuotaConfig
 	Router      RouterConfig
+	Streaming   bool
 }
 type RouterConfig struct {
 	FallbackEnabled bool
@@ -84,6 +85,7 @@ func parse(lookup func(string) string) (Config, error) {
 		RateLimit:  RateLimitConfig{Enabled: lookup("RATE_LIMIT_ENABLED") == "true", RequestsPerMinute: 60, Burst: 10},
 		UsageQuota: UsageQuotaConfig{Enabled: lookup("USAGE_QUOTA_ENABLED") == "true", DailyRequests: 2000},
 		Router:     RouterConfig{FallbackEnabled: lookup("AI_FALLBACK_ENABLED") == "true", MaxAttempts: 2, Timeout: 8 * time.Second},
+		Streaming:  lookup("STREAMING_ENABLED") == "true",
 	}
 
 	if rawPort := lookup("PORT"); rawPort != "" {

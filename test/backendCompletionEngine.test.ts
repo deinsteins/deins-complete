@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { CancelledError, NetworkError } from "../src/api/apiErrors";
+import { CancelledError, EndpointNotFoundError, NetworkError } from "../src/api/apiErrors";
 import { ApiCompletionResponse } from "../src/api/apiTypes";
 import { BackendClient } from "../src/api/deinsCompleteClient";
 import { BackendCompletionEngine, toApiCompletionRequest } from "../src/completion/backendCompletionEngine";
@@ -31,6 +31,19 @@ test("backend completion engine maps backend text", async () => {
 test("backend completion engine maps empty completion to null", async () => {
   const engine = new BackendCompletionEngine(new TestClient({ completion: { text: "" } }), "0.0.1", logger);
   assert.equal(await engine.complete(request, new AbortController().signal), null);
+});
+
+test("backend completion engine prefers streaming and falls back when unavailable", async () => {
+  let standardCalls = 0;
+  const streamClient: BackendClient = {
+    complete: async () => { standardCalls++; return { completion: { text: "standard" } }; },
+    streamComplete: async () => ({ completion: { text: "streamed" } }),
+    health: async () => ({ healthy: true, latencyMs: 1 }),
+  };
+  assert.deepEqual(await new BackendCompletionEngine(streamClient, "0.0.1", logger).complete(request, new AbortController().signal), { text: "streamed" });
+  const fallbackClient: BackendClient = { ...streamClient, streamComplete: async () => { throw new EndpointNotFoundError("not enabled"); } };
+  assert.deepEqual(await new BackendCompletionEngine(fallbackClient, "0.0.1", logger).complete(request, new AbortController().signal), { text: "standard" });
+  assert.equal(standardCalls, 1);
 });
 
 test("backend completion engine handles backend and cancellation errors silently", async () => {

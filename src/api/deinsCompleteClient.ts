@@ -25,6 +25,7 @@ import { normalizeBackendUrl } from "./backendUrl";
 
 export interface BackendClient {
   complete(request: ApiCompletionRequest, signal: AbortSignal): Promise<ApiCompletionResponse>;
+  streamComplete?(request: ApiCompletionRequest, signal: AbortSignal): Promise<ApiCompletionResponse>;
   health(signal?: AbortSignal): Promise<BackendHealthResult>;
 }
 
@@ -51,6 +52,25 @@ export class DeinsCompleteClient implements BackendClient {
     const payload = await this.parseCompletionResponse(response);
     this.logger?.debug(`Backend completion completed status=${response.status} durationMs=${Date.now() - startedAt} requestId=${payload.requestId ?? "none"}`);
     return payload;
+  }
+  async streamComplete(request: ApiCompletionRequest, signal: AbortSignal): Promise<ApiCompletionResponse> {
+    const response = await this.send("/v1/completions/stream", { method: "POST", headers: this.headers({ "Content-Type": "application/json", Accept: "text/event-stream" }), body: JSON.stringify(request) }, signal);
+    if (response.body === null) throw new InvalidResponseError("Backend stream is unavailable.", this.requestId(response));
+    const reader = response.body.getReader(); const decoder = new TextDecoder(); let buffer = ""; let text = ""; let requestId = this.requestId(response);
+    for (;;) {
+      const { done, value } = await reader.read(); buffer += decoder.decode(value, { stream: !done });
+      const events = buffer.split("\n\n"); buffer = events.pop() ?? "";
+      for (const event of events) {
+        const type = event.match(/^event:\s*(.+)$/m)?.[1]; const data = event.match(/^data:\s*(.+)$/m)?.[1]; if (data === undefined) continue;
+        let payload: unknown; try { payload = JSON.parse(data); } catch { throw new InvalidResponseError("Backend stream event is invalid.", requestId); }
+        if (!isRecord(payload)) continue;
+        if (type === "chunk" && typeof payload.text === "string") text += payload.text;
+        if (type === "error") throw new BackendUnavailableError("Backend stream failed.", requestId);
+        if (type === "done") { if (typeof payload.text === "string") text = payload.text; if (typeof payload.requestId === "string") requestId = payload.requestId; return { completion: { text }, requestId, metadata: { requestId } }; }
+      }
+      if (done) break;
+    }
+    throw new InvalidResponseError("Backend stream ended without completion.", requestId);
   }
   setInstallationToken(token: string | undefined): void { this.token = token; }
   async registerInstallation(installationId: string, signal?: AbortSignal): Promise<string> {

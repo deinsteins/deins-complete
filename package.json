@@ -114,6 +114,11 @@
           "maximum": 30000,
           "description": "Maximum time to wait for a DeinsComplete backend completion request."
         },
+        "deinscomplete.streaming.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Use streaming completion when the managed backend supports it."
+        },
         "deinscomplete.completion.debounceMs": {
           "type": "number",
           "default": 150,

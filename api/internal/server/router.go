@@ -15,7 +15,7 @@ import (
 	"deinscomplete/api/internal/usage"
 )
 
-func newRouter(logger *slog.Logger, service *completion.Service, authService *auth.Service, enabled bool, limiter ratelimit.Limiter, tracker usage.Tracker) http.Handler {
+func newRouter(logger *slog.Logger, service *completion.Service, authService *auth.Service, enabled bool, streaming bool, limiter ratelimit.Limiter, tracker usage.Tracker) http.Handler {
 	router := chi.NewRouter()
 	router.Use(middleware.RequestID, middleware.Recovery(logger), middleware.Logging(logger))
 	router.Get("/", handlers.Root)
@@ -33,6 +33,19 @@ func newRouter(logger *slog.Logger, service *completion.Service, authService *au
 		completionHandler = middleware.Auth(authService)(completionHandler)
 	}
 	router.Post("/v1/completions", completionHandler.ServeHTTP)
+	if streaming {
+		streamHandler := http.Handler(handlers.NewStreamHandler(service, logger))
+		if enabled {
+			if tracker != nil {
+				streamHandler = middleware.Quota(tracker)(streamHandler)
+			}
+			if limiter != nil {
+				streamHandler = middleware.RateLimit(limiter)(streamHandler)
+			}
+			streamHandler = middleware.Auth(authService)(streamHandler)
+		}
+		router.Post("/v1/completions/stream", streamHandler.ServeHTTP)
+	}
 	router.NotFound(func(writer http.ResponseWriter, request *http.Request) {
 		response.WriteError(writer, http.StatusNotFound, "NOT_FOUND", "Route not found.", middleware.GetRequestID(request.Context()))
 	})

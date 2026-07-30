@@ -147,3 +147,25 @@ func TestPromptIncludesRepositoryContext(t *testing.T) {
 		t.Fatal("repository context missing from prompt")
 	}
 }
+
+func TestProviderStreamsOpenAICompatibleSSE(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		var payload ChatCompletionRequest
+		if err := json.NewDecoder(request.Body).Decode(&payload); err != nil || !payload.Stream {
+			t.Fatal("stream request expected")
+		}
+		writer.Header().Set("Content-Type", "text/event-stream")
+		_, _ = writer.Write([]byte("data: {\"choices\":[{\"delta\":{\"content\":\"await \"}}]}\n\ndata: {\"choices\":[{\"delta\":{\"content\":\"getUser()\"}}]}\n\ndata: [DONE]\n\n"))
+	}))
+	defer server.Close()
+	configuration := testConfig(server.URL)
+	configuration.APIMode = "chat"
+	provider, err := New(configuration, testLogger())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var text string
+	if err := provider.StreamComplete(context.Background(), testRequest(), func(chunk string) error { text += chunk; return nil }); err != nil || text != "await getUser()" {
+		t.Fatalf("text=%q err=%v", text, err)
+	}
+}

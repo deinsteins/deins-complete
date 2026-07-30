@@ -21,7 +21,7 @@ type Server struct {
 func New(configuration config.Config, logger *slog.Logger, service *completion.Service) *Server {
 	return &Server{httpServer: &http.Server{
 		Addr:              fmt.Sprintf("%s:%d", configuration.Host, configuration.Port),
-		Handler:           newRouter(logger, service, auth.New(configuration.Auth.Secret, configuration.Auth.Version, configuration.Auth.TokenTTL), configuration.Auth.Enabled, rateLimit(configuration), quota(configuration)),
+		Handler:           newRouter(logger, service, auth.New(configuration.Auth.Secret, configuration.Auth.Version, configuration.Auth.TokenTTL), configuration.Auth.Enabled, configuration.Streaming, rateLimit(configuration), quota(configuration)),
 		ReadHeaderTimeout: 5 * time.Second,
 		IdleTimeout:       60 * time.Second,
 		MaxHeaderBytes:    32 << 10,

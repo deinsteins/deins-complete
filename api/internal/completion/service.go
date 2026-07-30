@@ -12,6 +12,9 @@ type Service struct {
 type Provider interface {
 	Complete(ctx context.Context, request Request) (Result, error)
 }
+type StreamingProvider interface {
+	StreamComplete(ctx context.Context, request Request, onChunk func(string) error) error
+}
 type Sanitizer interface{ Sanitize(Request, string) string }
 type identitySanitizer struct{}
 
@@ -32,4 +35,17 @@ func (service *Service) Complete(ctx context.Context, request Request) (Result, 
 	}
 	result.Text = service.sanitizer.Sanitize(request, result.Text)
 	return result, nil
+}
+
+func (service *Service) Stream(ctx context.Context, request Request, onChunk func(string) error) (Result, error) {
+	stream, ok := service.provider.(StreamingProvider)
+	if !ok {
+		return service.Complete(ctx, request)
+	}
+	var raw string
+	err := stream.StreamComplete(ctx, request, func(chunk string) error { raw += chunk; return onChunk(chunk) })
+	if err != nil {
+		return Result{}, err
+	}
+	return Result{Text: service.sanitizer.Sanitize(request, raw)}, nil
 }

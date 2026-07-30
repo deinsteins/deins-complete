@@ -1,4 +1,4 @@
-import { ApiError, CancelledError, QuotaExceededError, RateLimitError, TimeoutError, UnauthorizedError } from "../api/apiErrors";
+import { ApiError, CancelledError, EndpointNotFoundError, QuotaExceededError, RateLimitError, TimeoutError, UnauthorizedError } from "../api/apiErrors";
 import { ApiCompletionRequest, ApiLogger } from "../api/apiTypes";
 import { BackendClient } from "../api/deinsCompleteClient";
 import { CompletionEngine } from "./completionEngine";
@@ -12,18 +12,19 @@ export class BackendCompletionEngine implements CompletionEngine {
     private readonly ensureAuthentication?: (signal: AbortSignal) => Promise<void>,
     private readonly refreshAuthentication?: (signal: AbortSignal) => Promise<void>,
     private readonly onQuotaExceeded?: () => void,
+    private readonly streamingEnabled: () => boolean = () => true,
   ) {}
 
   async complete(request: CompletionRequest, signal: AbortSignal): Promise<CompletionResult | null> {
     try {
       await this.ensureAuthentication?.(signal);
-      const response = await this.client.complete(toApiCompletionRequest(request, this.extensionVersion), signal);
+      const response = await this.completeRequest(request, signal);
       return response.completion.text === "" ? null : { text: response.completion.text };
     } catch (error) {
       if (error instanceof UnauthorizedError && this.refreshAuthentication !== undefined && !signal.aborted) {
         try {
           await this.refreshAuthentication(signal);
-          const response = await this.client.complete(toApiCompletionRequest(request, this.extensionVersion), signal);
+          const response = await this.completeRequest(request, signal);
           return response.completion.text === "" ? null : { text: response.completion.text };
         } catch (refreshError) {
           if (refreshError instanceof CancelledError || signal.aborted) return null;
@@ -48,6 +49,14 @@ export class BackendCompletionEngine implements CompletionEngine {
       this.logger.debug(`Backend completion unavailable${requestId}`);
       return null;
     }
+  }
+
+  private async completeRequest(request: CompletionRequest, signal: AbortSignal) {
+    const apiRequest = toApiCompletionRequest(request, this.extensionVersion);
+    if (this.streamingEnabled() && this.client.streamComplete !== undefined) {
+      try { return await this.client.streamComplete(apiRequest, signal); } catch (error) { if (!(error instanceof EndpointNotFoundError)) throw error; this.logger.debug("Backend streaming unavailable; using standard completion"); }
+    }
+    return this.client.complete(apiRequest, signal);
   }
 }
 

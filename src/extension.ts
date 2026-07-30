@@ -38,7 +38,7 @@ export function activate(context: vscode.ExtensionContext): void {
     let quotaNotified = false;
     const engine = new BackendCompletionEngine(backendClient, extensionVersion, logger, authenticate, refreshAuthentication, () => {
       if (!quotaNotified) { quotaNotified = true; void vscode.window.showWarningMessage("DeinsComplete daily completion limit reached."); }
-    });
+    }, () => config.streamingEnabled());
     const requests = new RequestManager(engine, config);
     const repositoryContext = new RepositoryContextBuilder(config);
     const completionProvider = new DeinsCompleteInlineCompletionProvider(lifecycle, new ContextBuilder(config, undefined, getSafeFilePath), repositoryContext, requests, logger);

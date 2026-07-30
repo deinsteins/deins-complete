@@ -13,6 +13,7 @@ export class ConfigService implements EnabledConfiguration, ContextLimitsProvide
   cacheEnabled(){return vscode.workspace.getConfiguration(namespace).get<boolean>("cache.enabled",true)}
   cacheTtlMs(){const v=vscode.workspace.getConfiguration(namespace).get<number>("cache.ttlMs",60000);return v>=1000&&v<=300000?v:60000}
   cacheMaxEntries(){const v=vscode.workspace.getConfiguration(namespace).get<number>("cache.maxEntries",100);return v>=10&&v<=1000?v:100}
+  streamingEnabled(){return vscode.workspace.getConfiguration(namespace).get<boolean>("streaming.enabled",true)}
   isEnabled(): boolean {
     return vscode.workspace.getConfiguration(namespace).get<boolean>(enabledSetting, true);
   }
