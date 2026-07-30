@@ -78,6 +78,7 @@ export function toApiCompletionRequest(request: CompletionRequest, version: stri
     apiRequest.repositoryContext = {
       files: request.repositoryContext.files,
       symbols: request.repositoryContext.symbols,
+      ...(request.repositoryContext.dependencies !== undefined ? { dependencies: request.repositoryContext.dependencies } : {}),
     };
   }
   return apiRequest;

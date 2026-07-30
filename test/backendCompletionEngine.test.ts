@@ -66,6 +66,7 @@ test("API request mapping includes bounded repository context but not its cache 
     repositoryContext: {
       files: [{ path: "src/types/user.ts", language: "typescript", content: "export interface User { id: string }", reason: "import" }],
       symbols: [{ name: "User", kind: "interface", filePath: "src/types/user.ts", signature: "export interface User" }],
+      dependencies: ["@mui/material"],
       fingerprint: "private-cache-key",
       durationMs: 12,
       timedOut: false,
@@ -74,6 +75,7 @@ test("API request mapping includes bounded repository context but not its cache 
   assert.deepEqual(toApiCompletionRequest(withRepository, "0.0.1").repositoryContext, {
     files: [{ path: "src/types/user.ts", language: "typescript", content: "export interface User { id: string }", reason: "import" }],
     symbols: [{ name: "User", kind: "interface", filePath: "src/types/user.ts", signature: "export interface User" }],
+    dependencies: ["@mui/material"],
   });
   assert.equal(JSON.stringify(toApiCompletionRequest(withRepository, "0.0.1")).includes("private-cache-key"), false);
 });

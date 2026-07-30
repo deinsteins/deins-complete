@@ -16,10 +16,13 @@ func BuildMessages(request completion.Request) []Message {
 }
 
 func repositoryPrompt(request completion.Request) string {
-	if request.RepositoryContext == nil || len(request.RepositoryContext.Files) == 0 {
+	if request.RepositoryContext == nil || (len(request.RepositoryContext.Files) == 0 && len(request.RepositoryContext.Dependencies) == 0) {
 		return ""
 	}
 	text := "\n\n<REPOSITORY_CONTEXT>"
+	if len(request.RepositoryContext.Dependencies) > 0 {
+		text += fmt.Sprintf("\n<DEPENDENCIES>%v</DEPENDENCIES>", request.RepositoryContext.Dependencies)
+	}
 	for _, file := range request.RepositoryContext.Files {
 		text += fmt.Sprintf("\n<FILE path=%q language=%q reason=%q>\n%s\n</FILE>", file.Path, file.Language, file.Reason, file.Content)
 	}

@@ -28,8 +28,9 @@ type RepositorySymbol struct {
 }
 
 type RepositoryContext struct {
-	Files   []RepositoryContextFile `json:"files"`
-	Symbols []RepositorySymbol      `json:"symbols,omitempty"`
+	Files        []RepositoryContextFile `json:"files"`
+	Symbols      []RepositorySymbol      `json:"symbols,omitempty"`
+	Dependencies []string                `json:"dependencies,omitempty"`
 }
 
 type Request struct {

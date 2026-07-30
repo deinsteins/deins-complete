@@ -10,7 +10,8 @@ export function completionRequestMode(context: CompletionContext): CompletionReq
   const names = [...imports.matchAll(/(?:import\s+(?:type\s+)?(?:\{\s*)?([A-Za-z_$][\w$]*)|\bfrom\s+[^\n]+\s+import\s+([A-Za-z_$][\w$]*))/g)]
     .flatMap((match) => [match[1], match[2]].filter((name): name is string => name !== undefined));
   const line = context.textBeforeCursorOnLine;
-  return names.some((name) => new RegExp(`\\b${escapeRegExp(name)}(?:\\.|\\s*\\()`).test(line)) ? "full" : "fast";
+  if (/\b(?:className|class|@apply)\b/.test(line)) return "full";
+  return names.some((name) => new RegExp(`(?:\\b${escapeRegExp(name)}(?:\\.|\\s*\\()|<${escapeRegExp(name)}\\b)`).test(line)) ? "full" : "fast";
 }
 
 function escapeRegExp(value: string): string { return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); }

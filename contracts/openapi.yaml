@@ -132,6 +132,11 @@ components:
           type: array
           maxItems: 100
           items: { $ref: '#/components/schemas/RepositorySymbol' }
+        dependencies:
+          type: array
+          maxItems: 24
+          description: Bounded package names relevant to the active file; package versions and lockfiles are not sent.
+          items: { type: string, maxLength: 200 }
     Client:
       type: object
       properties:

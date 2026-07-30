@@ -3,14 +3,15 @@ package completion
 import "errors"
 
 const (
-	MaxPrefixCharacters    = 50000
-	MaxSuffixCharacters    = 25000
-	MaxLanguageLength      = 100
-	MaxFilePathLength      = 4096
-	MaxClientFieldLength   = 100
-	MaxRepositoryFiles     = 8
-	MaxRepositoryChars     = 30000
-	MaxRepositoryFileChars = 10000
+	MaxPrefixCharacters       = 50000
+	MaxSuffixCharacters       = 25000
+	MaxLanguageLength         = 100
+	MaxFilePathLength         = 4096
+	MaxClientFieldLength      = 100
+	MaxRepositoryFiles        = 8
+	MaxRepositoryChars        = 30000
+	MaxRepositoryFileChars    = 10000
+	MaxRepositoryDependencies = 24
 )
 
 var ErrInvalidRequest = errors.New("invalid completion request")
@@ -35,11 +36,16 @@ func Validate(request Request) error {
 				return ErrInvalidRequest
 			}
 		}
-		if total > MaxRepositoryChars || len(repository.Symbols) > 100 {
+		if total > MaxRepositoryChars || len(repository.Symbols) > 100 || len(repository.Dependencies) > MaxRepositoryDependencies {
 			return ErrInvalidRequest
 		}
 		for _, symbol := range repository.Symbols {
 			if symbol.Name == "" || len(symbol.Name) > 300 || len(symbol.Kind) > 100 || len(symbol.FilePath) > MaxFilePathLength || len(symbol.Signature) > 1000 || isAbsolutePath(symbol.FilePath) {
+				return ErrInvalidRequest
+			}
+		}
+		for _, dependency := range repository.Dependencies {
+			if dependency == "" || len(dependency) > 200 {
 				return ErrInvalidRequest
 			}
 		}

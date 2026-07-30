@@ -3,6 +3,7 @@ import * as path from "node:path";
 import * as vscode from "vscode";
 import { CompletionContext, RepositoryContext, RepositoryContextFile, RepositoryContextReason, RepositorySymbol } from "../contextTypes";
 import { RepositoryContextSettings } from "./repositoryContextConfig";
+import { relevantDependencies } from "./dependencyContext";
 
 const maxFileBytes = 1024 * 1024;
 const perFileCharacters = 3000;
@@ -18,6 +19,7 @@ type CachedText = { text: string; version?: number };
 export class RepositoryContextBuilder {
   private readonly recent = new Map<string, vscode.Uri>();
   private readonly cache = new Map<string, CachedText>();
+  private readonly dependencyCache = new Map<string, CachedText>();
   private readonly stats = { requests: 0, success: 0, partial: 0, timedOut: 0, filesIncluded: 0, totalDurationMs: 0, lastFiles: 0, lastCharacters: 0, lastDurationMs: 0 };
 
   constructor(private readonly settings: RepositoryContextSettings) {}
@@ -29,7 +31,10 @@ export class RepositoryContextBuilder {
     while (this.recent.size > 20) this.recent.delete(this.recent.keys().next().value as string);
   }
 
-  invalidate(uri: vscode.Uri): void { this.cache.delete(uri.toString()); }
+  invalidate(uri: vscode.Uri): void {
+    this.cache.delete(uri.toString());
+    if (path.posix.basename(uri.path) === "package.json") this.dependencyCache.delete(uri.toString());
+  }
   getStats() { return { ...this.stats }; }
 
   async build(document: vscode.TextDocument, current: CompletionContext, signal: AbortSignal): Promise<RepositoryContext | undefined> {
@@ -40,6 +45,7 @@ export class RepositoryContextBuilder {
     const expired = () => signal.aborted || performance.now() - started >= limits.timeoutMs;
     this.record(document);
     const candidates = new Map<string, Candidate>();
+    const dependencies = await this.readDependencies(document);
     const add = (candidate: Candidate) => {
       if (candidate.uri.toString() === document.uri.toString() || !this.isEligible(candidate.uri)) return;
       const previous = candidates.get(candidate.uri.toString());
@@ -75,7 +81,7 @@ export class RepositoryContextBuilder {
       symbols.push(...extractSymbols(text, filePath, candidate.names));
     }
     if (signal.aborted) return undefined;
-    const fingerprint = createHash("sha256").update(files.map((file) => `${file.path}\0${file.content}`).join("\0")).digest("hex");
+    const fingerprint = createHash("sha256").update(files.map((file) => `${file.path}\0${file.content}`).join("\0")).update("\0").update(dependencies.join("\0")).digest("hex");
     const durationMs = Math.round(performance.now() - started);
     const timedOut = durationMs >= limits.timeoutMs;
     this.stats.success++;
@@ -86,7 +92,25 @@ export class RepositoryContextBuilder {
     this.stats.lastDurationMs = durationMs;
     if (timedOut) this.stats.timedOut++;
     if (timedOut || files.length < candidates.size) this.stats.partial++;
-    return { files, symbols: dedupeSymbols(symbols).slice(0, 20), fingerprint, durationMs, timedOut };
+    return { files, symbols: dedupeSymbols(symbols).slice(0, 20), dependencies, fingerprint, durationMs, timedOut };
+  }
+
+  private async readDependencies(document: vscode.TextDocument): Promise<string[]> {
+    const folder = vscode.workspace.getWorkspaceFolder(document.uri);
+    if (folder === undefined) return [];
+    const manifest = vscode.Uri.joinPath(folder.uri, "package.json");
+    let text: string | undefined;
+    const open = vscode.workspace.textDocuments.find((item) => item.uri.toString() === manifest.toString());
+    if (open !== undefined) {
+      const cached = this.dependencyCache.get(manifest.toString());
+      text = cached?.version === open.version ? cached.text : open.getText();
+      this.dependencyCache.set(manifest.toString(), { text, version: open.version });
+    } else {
+      const cached = this.dependencyCache.get(manifest.toString());
+      if (cached !== undefined) text = cached.text;
+      else try { text = new TextDecoder().decode(await vscode.workspace.fs.readFile(manifest)); this.dependencyCache.set(manifest.toString(), { text }); } catch { return []; }
+    }
+    return relevantDependencies(text, document.getText());
   }
 
   private async resolveImport(from: vscode.Uri, specifier: string): Promise<vscode.Uri | undefined> {

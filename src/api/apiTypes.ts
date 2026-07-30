@@ -10,6 +10,7 @@ export interface ApiCompletionRequest {
   repositoryContext?: {
     files: Array<{ path: string; language: string; content: string; reason: string }>;
     symbols?: Array<{ name: string; kind: string; filePath: string; signature?: string }>;
+    dependencies?: string[];
   };
   client: {
     name: "deinscomplete-vscode";
