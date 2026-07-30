@@ -1,4 +1,4 @@
-deinscomplete.web.id {
+api.deinscomplete.web.id {
   encode zstd gzip
   reverse_proxy api:8080
 }

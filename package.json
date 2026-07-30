@@ -73,7 +73,7 @@
         },
         "deinscomplete.backend.url": {
           "type": "string",
-          "default": "https://deinscomplete.web.id",
+          "default": "https://api.deinscomplete.web.id",
           "description": "DeinsComplete backend service URL."
         },
         "deinscomplete.backend.timeoutMs": {
