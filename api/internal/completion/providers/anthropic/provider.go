@@ -107,6 +107,9 @@ func userPrompt(r completion.Request) string {
 		if r.RepositoryContext.Focus != "" {
 			prompt += "\n<COMPLETION_FOCUS>" + r.RepositoryContext.Focus + "</COMPLETION_FOCUS>"
 		}
+		if len(r.RepositoryContext.Diagnostics) > 0 {
+			prompt += "\n<DIAGNOSTICS>" + strings.Join(r.RepositoryContext.Diagnostics, " | ") + "</DIAGNOSTICS>"
+		}
 		if len(r.RepositoryContext.Dependencies) > 0 {
 			prompt += "\n<DEPENDENCIES>" + strings.Join(r.RepositoryContext.Dependencies, ", ") + "</DEPENDENCIES>"
 		}

@@ -32,6 +32,7 @@ type RepositoryContext struct {
 	Symbols      []RepositorySymbol      `json:"symbols,omitempty"`
 	Dependencies []string                `json:"dependencies,omitempty"`
 	Focus        string                  `json:"focus,omitempty"`
+	Diagnostics  []string                `json:"diagnostics,omitempty"`
 }
 
 type Request struct {

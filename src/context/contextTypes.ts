@@ -49,6 +49,7 @@ export interface RepositoryContext {
   symbols?: RepositorySymbol[];
   dependencies?: string[];
   focus?: string;
+  diagnostics?: string[];
   fingerprint: string;
   durationMs: number;
   timedOut: boolean;

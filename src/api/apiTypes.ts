@@ -12,6 +12,7 @@ export interface ApiCompletionRequest {
     symbols?: Array<{ name: string; kind: string; filePath: string; signature?: string }>;
     dependencies?: string[];
     focus?: string;
+    diagnostics?: string[];
   };
   client: {
     name: "deinscomplete-vscode";

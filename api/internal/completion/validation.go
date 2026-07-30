@@ -52,6 +52,14 @@ func Validate(request Request) error {
 				return ErrInvalidRequest
 			}
 		}
+		if len(repository.Diagnostics) > 3 {
+			return ErrInvalidRequest
+		}
+		for _, diagnostic := range repository.Diagnostics {
+			if diagnostic == "" || len(diagnostic) > 300 {
+				return ErrInvalidRequest
+			}
+		}
 	}
 	return nil
 }

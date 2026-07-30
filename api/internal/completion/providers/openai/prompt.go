@@ -23,6 +23,9 @@ func repositoryPrompt(request completion.Request) string {
 	if request.RepositoryContext.Focus != "" {
 		text += fmt.Sprintf("\n<COMPLETION_FOCUS>%s</COMPLETION_FOCUS>", request.RepositoryContext.Focus)
 	}
+	if len(request.RepositoryContext.Diagnostics) > 0 {
+		text += fmt.Sprintf("\n<DIAGNOSTICS>%v</DIAGNOSTICS>", request.RepositoryContext.Diagnostics)
+	}
 	if len(request.RepositoryContext.Dependencies) > 0 {
 		text += fmt.Sprintf("\n<DEPENDENCIES>%v</DEPENDENCIES>", request.RepositoryContext.Dependencies)
 	}

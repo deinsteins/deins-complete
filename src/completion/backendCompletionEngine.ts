@@ -80,6 +80,7 @@ export function toApiCompletionRequest(request: CompletionRequest, version: stri
       symbols: request.repositoryContext.symbols,
       ...(request.repositoryContext.dependencies !== undefined ? { dependencies: request.repositoryContext.dependencies } : {}),
       ...(request.repositoryContext.focus !== undefined ? { focus: request.repositoryContext.focus } : {}),
+      ...(request.repositoryContext.diagnostics !== undefined ? { diagnostics: request.repositoryContext.diagnostics } : {}),
     };
   }
   return apiRequest;

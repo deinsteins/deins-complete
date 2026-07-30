@@ -141,6 +141,10 @@ components:
           type: string
           enum: [component-props, member-access, function-arguments, tailwind-class, object-fields, general]
           description: Server-side completion-position classification.
+        diagnostics:
+          type: array
+          maxItems: 3
+          items: { type: string, maxLength: 300 }
     Client:
       type: object
       properties:

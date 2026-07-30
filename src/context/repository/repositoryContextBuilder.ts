@@ -66,6 +66,7 @@ export class RepositoryContextBuilder {
       const config = await this.findWorkspaceFile(document.uri, ["tailwind.config.ts", "tailwind.config.js", "tailwind.config.cjs", "tailwind.config.mjs"]);
       if (config !== undefined) add({ uri: config, reason: "framework-config", names: ["theme", "colors", "extend"], score: 100 });
     }
+    for (const uri of await this.siblingTests(document.uri)) add({ uri, reason: "symbol-reference", names: identifiersNearCursor(current), score: 80 });
     for (const uri of [...this.recent.values()].reverse()) {
       if (expired()) break;
       const open = vscode.workspace.textDocuments.find((item) => item.uri.toString() === uri.toString());
@@ -90,6 +91,7 @@ export class RepositoryContextBuilder {
       symbols.push(...extractSymbols(text, filePath, candidate.names));
     }
     const focus = completionFocus(current);
+    const diagnostics = vscode.languages.getDiagnostics(document.uri).slice(0, 3).map((item) => item.message.replace(/\s+/g, " ").slice(0, 300));
     if (!expired()) symbols.push(...await this.librarySymbols(document, current, focus, deadline));
     if (signal.aborted) return undefined;
     const boundedSymbols = dedupeSymbols(symbols).slice(0, 20);
@@ -104,7 +106,7 @@ export class RepositoryContextBuilder {
     this.stats.lastDurationMs = durationMs;
     if (timedOut) this.stats.timedOut++;
     if (timedOut || files.length < candidates.size) this.stats.partial++;
-    return { files, symbols: boundedSymbols, dependencies, focus, fingerprint, durationMs, timedOut };
+    return { files, symbols: boundedSymbols, dependencies, focus, diagnostics, fingerprint, durationMs, timedOut };
   }
 
   private async readDependencies(document: vscode.TextDocument): Promise<string[]> {
@@ -155,6 +157,15 @@ export class RepositoryContextBuilder {
       try { const stat = await vscode.workspace.fs.stat(uri); if (stat.size <= maxFileBytes && (stat.type & vscode.FileType.File) !== 0) return uri; } catch { /* optional config */ }
     }
     return undefined;
+  }
+
+  private async siblingTests(uri: vscode.Uri): Promise<vscode.Uri[]> {
+    const extension = path.posix.extname(uri.path); const base = uri.path.slice(0, -extension.length);
+    if (/\.(?:test|spec)$/.test(base)) return [];
+    const tests = [".test", ".spec"].map((suffix) => uri.with({ path: base + suffix + extension }));
+    const found: vscode.Uri[] = [];
+    for (const test of tests) try { const stat = await vscode.workspace.fs.stat(test); if ((stat.type & vscode.FileType.File) !== 0 && stat.size <= maxFileBytes) found.push(test); } catch { /* optional test */ }
+    return found;
   }
 
   private async librarySymbols(document: vscode.TextDocument, current: CompletionContext, focus: CompletionFocus, deadline: number): Promise<RepositorySymbol[]> {
