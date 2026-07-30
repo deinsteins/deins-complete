@@ -8,6 +8,7 @@ import { RequestManager } from "./requestManager";
 import { CompletionRequest } from "./completionTypes";
 import { completionRequestMode } from "./contextComplexity";
 import { EditorStateSnapshot, isCurrentEditorState } from "./editorState";
+import { AutoImportResolver } from "./autoImportResolver";
 
 export class DeinsCompleteInlineCompletionProvider implements vscode.InlineCompletionItemProvider {
   constructor(
@@ -16,6 +17,7 @@ export class DeinsCompleteInlineCompletionProvider implements vscode.InlineCompl
     private readonly repositoryContextBuilder: RepositoryContextBuilder,
     private readonly requests: RequestManager,
     private readonly logger: Logger,
+    private readonly autoImports: AutoImportResolver,
   ) {}
 
   async provideInlineCompletionItems(
@@ -50,7 +52,9 @@ export class DeinsCompleteInlineCompletionProvider implements vscode.InlineCompl
       }
 
       this.logger.debug("Inline completion produced result");
-      return [new vscode.InlineCompletionItem(result.text, new vscode.Range(position, position))];
+      const plan = await this.autoImports.resolve(document, position, result.text).catch(() => undefined);
+      const command = plan === undefined ? undefined : { command: "deinscomplete.applyAutoImport", title: "Apply verified import", arguments: [plan] };
+      return [new vscode.InlineCompletionItem(result.text, new vscode.Range(position, position), command)];
     } catch (error) {
       this.logger.error("Inline completion failed", error);
       return [];

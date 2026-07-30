@@ -15,6 +15,7 @@ import { CredentialStore } from "./security/credentialStore";
 import { getInstallationId } from "./identity/installationIdentity";
 import { InstallationService } from "./identity/installationService";
 import { FeedbackService } from "./feedback/feedbackService";
+import { AutoImportResolver } from "./completion/autoImportResolver";
 
 export function activate(context: vscode.ExtensionContext): void {
   const logger = new Logger();
@@ -43,7 +44,8 @@ export function activate(context: vscode.ExtensionContext): void {
     const requests = new RequestManager(engine, config);
     const repositoryContext = new RepositoryContextBuilder(config);
     const feedback = new FeedbackService();
-    const completionProvider = new DeinsCompleteInlineCompletionProvider(lifecycle, new ContextBuilder(config, undefined, getSafeFilePath), repositoryContext, requests, logger);
+    const autoImports = new AutoImportResolver();
+    const completionProvider = new DeinsCompleteInlineCompletionProvider(lifecycle, new ContextBuilder(config, undefined, getSafeFilePath), repositoryContext, requests, logger, autoImports);
     statusBar.update(lifecycle.getState());
 
     context.subscriptions.push(
@@ -54,7 +56,7 @@ export function activate(context: vscode.ExtensionContext): void {
       vscode.workspace.onDidChangeTextDocument((event) => repositoryContext.invalidate(event.document.uri)),
       vscode.window.onDidChangeActiveTextEditor((editor) => { if (editor !== undefined) repositoryContext.record(editor.document); }),
       vscode.languages.registerInlineCompletionItemProvider({ scheme: "file" }, completionProvider),
-      ...registerCommands(config, lifecycle, logger, backendClient, requests, installation, repositoryContext, engine, feedback),
+      ...registerCommands(config, lifecycle, logger, backendClient, requests, installation, repositoryContext, engine, feedback, autoImports),
     );
     logger.info("DeinsComplete activated.");
   } catch (error) {
