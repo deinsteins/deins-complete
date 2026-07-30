@@ -17,7 +17,7 @@ import (
 )
 
 func testConfig(baseURL string) config.AIConfig {
-	return config.AIConfig{Provider: "openai-compatible", BaseURL: baseURL, APIKey: "test-key", Model: "test-model", Timeout: time.Second, MaxTokens: 128, Temperature: 0.1}
+	return config.AIConfig{Provider: "openai-compatible", OpenAI: config.OpenAIConfig{BaseURL: baseURL, APIKey: "test-key", Model: "test-model"}, Timeout: time.Second, MaxTokens: 128, Temperature: 0.1}
 }
 
 func testLogger() *slog.Logger { return slog.New(slog.NewTextHandler(io.Discard, nil)) }

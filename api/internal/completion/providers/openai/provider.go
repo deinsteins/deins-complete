@@ -30,7 +30,7 @@ type Provider struct {
 }
 
 func New(configuration config.AIConfig, logger *slog.Logger) (*Provider, error) {
-	baseURL, err := normalizeBaseURL(configuration.BaseURL)
+	baseURL, err := normalizeBaseURL(configuration.OpenAI.BaseURL)
 	if err != nil {
 		return nil, err
 	}
@@ -39,7 +39,7 @@ func New(configuration config.AIConfig, logger *slog.Logger) (*Provider, error) 
 	transport.MaxIdleConnsPerHost = 20
 	transport.IdleConnTimeout = 90 * time.Second
 	return &Provider{
-		baseURL: baseURL, apiKey: configuration.APIKey, model: configuration.Model,
+		baseURL: baseURL, apiKey: configuration.OpenAI.APIKey, model: configuration.OpenAI.Model,
 		timeout: configuration.Timeout, maxTokens: configuration.MaxTokens, temperature: configuration.Temperature,
 		client: &http.Client{Transport: transport}, logger: logger,
 	}, nil

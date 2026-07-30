@@ -16,7 +16,9 @@ To test the extension against the mock backend, start the API above, launch an E
 
 ## Backend AI provider setup
 
-The backend defaults to `AI_PROVIDER=mock` for local development. To use an OpenAI-compatible API, set these server-side environment variables (for example in an uncommitted `api/.env` managed by your process runner):
+The backend supports `AI_PROVIDER=mock`, `AI_PROVIDER=openai-compatible`, and `AI_PROVIDER=anthropic`. Provider setup is server-side only.
+
+For an OpenAI-compatible API, set these server-side environment variables (for example in an uncommitted `api/.env` managed by your process runner):
 
 ```env
 AI_PROVIDER=openai-compatible
@@ -26,6 +28,16 @@ AI_MODEL=
 AI_TIMEOUT_MS=10000
 AI_MAX_TOKENS=128
 AI_TEMPERATURE=0.1
+```
+
+For Anthropic Messages API, use the shared timeout/token settings and configure:
+
+```env
+AI_PROVIDER=anthropic
+ANTHROPIC_BASE_URL=https://api.anthropic.com
+ANTHROPIC_API_KEY=
+ANTHROPIC_MODEL=
+ANTHROPIC_VERSION=2023-06-01
 ```
 
 These are backend-operator settings only. VS Code users do not configure an upstream provider, model, base URL, or API key. The backend sends only bounded `language`, `prefix`, and `suffix` context to the configured provider.

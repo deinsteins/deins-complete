@@ -5,6 +5,7 @@ import (
 	"log/slog"
 
 	"deinscomplete/api/internal/completion"
+	"deinscomplete/api/internal/completion/providers/anthropic"
 	"deinscomplete/api/internal/completion/providers/openai"
 	"deinscomplete/api/internal/config"
 )
@@ -15,6 +16,8 @@ func NewProvider(configuration config.AIConfig, logger *slog.Logger) (Provider, 
 		return MockProvider{}, nil
 	case "openai-compatible":
 		return openai.New(configuration, logger)
+	case "anthropic":
+		return anthropic.New(configuration, logger)
 	default:
 		return nil, fmt.Errorf("unsupported AI_PROVIDER: %s", configuration.Provider)
 	}

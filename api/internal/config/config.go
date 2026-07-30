@@ -11,13 +11,15 @@ import (
 
 type AIConfig struct {
 	Provider    string
-	BaseURL     string
-	APIKey      string
-	Model       string
 	Timeout     time.Duration
 	MaxTokens   int
 	Temperature float64
+	OpenAI      OpenAIConfig
+	Anthropic   AnthropicConfig
 }
+
+type OpenAIConfig struct{ BaseURL, APIKey, Model string }
+type AnthropicConfig struct{ BaseURL, APIKey, Model, Version string }
 
 type Config struct {
 	Environment string
@@ -39,9 +41,8 @@ func parse(lookup func(string) string) (Config, error) {
 		Port:        3001,
 		AI: AIConfig{
 			Provider:    valueOrDefault(lookup("AI_PROVIDER"), "mock"),
-			BaseURL:     lookup("AI_BASE_URL"),
-			APIKey:      lookup("AI_API_KEY"),
-			Model:       lookup("AI_MODEL"),
+			OpenAI:      OpenAIConfig{BaseURL: lookup("AI_BASE_URL"), APIKey: lookup("AI_API_KEY"), Model: lookup("AI_MODEL")},
+			Anthropic:   AnthropicConfig{BaseURL: lookup("ANTHROPIC_BASE_URL"), APIKey: lookup("ANTHROPIC_API_KEY"), Model: lookup("ANTHROPIC_MODEL"), Version: lookup("ANTHROPIC_VERSION")},
 			Timeout:     10 * time.Second,
 			MaxTokens:   128,
 			Temperature: 0.1,
@@ -92,20 +93,33 @@ func parseAIConfig(config *AIConfig, environment string, lookup func(string) str
 		}
 		config.Temperature = value
 	}
-	if config.Provider != "openai-compatible" {
+	switch config.Provider {
+	case "mock":
+		return nil
+	case "openai-compatible":
+		if config.OpenAI.BaseURL == "" || config.OpenAI.APIKey == "" || config.OpenAI.Model == "" {
+			return fmt.Errorf("AI_BASE_URL, AI_API_KEY, and AI_MODEL are required for AI_PROVIDER=openai-compatible")
+		}
+		return validateProviderURL(&config.OpenAI.BaseURL, environment, "AI_BASE_URL")
+	case "anthropic":
+		if config.Anthropic.BaseURL == "" || config.Anthropic.APIKey == "" || config.Anthropic.Model == "" || config.Anthropic.Version == "" {
+			return fmt.Errorf("ANTHROPIC_BASE_URL, ANTHROPIC_API_KEY, ANTHROPIC_MODEL, and ANTHROPIC_VERSION are required for AI_PROVIDER=anthropic")
+		}
+		return validateProviderURL(&config.Anthropic.BaseURL, environment, "ANTHROPIC_BASE_URL")
+	default:
 		return nil
 	}
-	if config.BaseURL == "" || config.APIKey == "" || config.Model == "" {
-		return fmt.Errorf("AI_BASE_URL, AI_API_KEY, and AI_MODEL are required for AI_PROVIDER=openai-compatible")
-	}
-	parsedURL, err := url.Parse(config.BaseURL)
+}
+
+func validateProviderURL(value *string, environment, name string) error {
+	parsedURL, err := url.Parse(*value)
 	if err != nil || (parsedURL.Scheme != "http" && parsedURL.Scheme != "https") || parsedURL.Host == "" {
-		return fmt.Errorf("invalid AI_BASE_URL")
+		return fmt.Errorf("invalid %s", name)
 	}
 	if environment == "production" && parsedURL.Scheme != "https" {
-		return fmt.Errorf("AI_BASE_URL must use HTTPS in production")
+		return fmt.Errorf("%s must use HTTPS in production", name)
 	}
-	config.BaseURL = strings.TrimRight(config.BaseURL, "/")
+	*value = strings.TrimRight(*value, "/")
 	return nil
 }
 
