@@ -9,6 +9,23 @@ services:
       - no-new-privileges:true
     tmpfs: ["/tmp"]
     networks: [deinscomplete]
+    depends_on:
+      redis:
+        condition: service_healthy
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    expose: ["6379"]
+    volumes: [redis_data:/data]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    security_opt:
+      - no-new-privileges:true
+    networks: [deinscomplete]
   caddy:
     image: caddy:2-alpine
     restart: unless-stopped
@@ -23,3 +40,4 @@ networks:
 volumes:
   caddy_data:
   caddy_config:
+  redis_data:

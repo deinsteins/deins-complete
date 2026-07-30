@@ -1,6 +1,6 @@
 # AWS EC2 private-beta deployment
 
-Runtime: Ubuntu ARM64 on EC2 t4g.small, Docker Compose, Caddy, and the Go API on the internal `api:8080` network. Public traffic is only HTTPS at `https://api.deinscomplete.web.id`.
+Runtime: Ubuntu ARM64 on EC2 t4g.small, Docker Compose, Caddy, Redis, and the Go API on the internal Docker network. Public traffic is only HTTPS at `https://api.deinscomplete.web.id`; Redis is internal-only at `redis:6379` and must never have a host `ports:` mapping.
 
 On the server, retain the existing `/app/deinscomplete/.env`; CI never copies or overwrites it. Add the non-secret image repository to the deployment shell when rolling back: `export DEINSCOMPLETE_IMAGE_REPOSITORY=ghcr.io/<owner>/<repository>/api`.
 
