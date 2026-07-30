@@ -3,14 +3,14 @@ import { ContextBuilder } from "../context/contextBuilder";
 import { DeinsCompleteLifecycle } from "../core/lifecycle";
 import { Logger } from "../logging/logger";
 import { bridgeCancellation } from "../utils/cancellation";
-import { CompletionEngine } from "./completionEngine";
+import { RequestManager } from "./requestManager";
 import { EditorStateSnapshot, isCurrentEditorState } from "./editorState";
 
 export class DeinsCompleteInlineCompletionProvider implements vscode.InlineCompletionItemProvider {
   constructor(
     private readonly lifecycle: DeinsCompleteLifecycle,
     private readonly contextBuilder: ContextBuilder,
-    private readonly engine: CompletionEngine,
+    private readonly requests: RequestManager,
     private readonly logger: Logger,
   ) {}
 
@@ -30,7 +30,7 @@ export class DeinsCompleteInlineCompletionProvider implements vscode.InlineCompl
     this.logger.debug(`Inline completion requested (language=${request.language}, version=${snapshot.version}, prefixChars=${request.metadata.prefixCharacters}, suffixChars=${request.metadata.suffixCharacters})`);
 
     try {
-      const result = await this.engine.complete(request, cancellation.signal);
+      const result = await this.requests.complete(document.uri.toString(), request, cancellation.signal);
       if (cancellation.signal.aborted) {
         this.logger.debug("Completion discarded: request cancelled");
         return [];

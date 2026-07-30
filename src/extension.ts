@@ -4,6 +4,7 @@ import { DeinsCompleteClient } from "./api/deinsCompleteClient";
 import { ContextBuilder } from "./context/contextBuilder";
 import { DeinsCompleteInlineCompletionProvider } from "./completion/inlineCompletionProvider";
 import { BackendCompletionEngine } from "./completion/backendCompletionEngine";
+import { RequestManager } from "./completion/requestManager";
 import { ConfigService } from "./config/configService";
 import { DeinsCompleteLifecycle } from "./core/lifecycle";
 import { Logger } from "./logging/logger";
@@ -20,11 +21,13 @@ export function activate(context: vscode.ExtensionContext): void {
     const statusBar = new DeinsCompleteStatusBar();
     const backendClient = new DeinsCompleteClient(config, globalThis.fetch, logger);
     const engine = new BackendCompletionEngine(backendClient, String(context.extension.packageJSON.version), logger);
-    const completionProvider = new DeinsCompleteInlineCompletionProvider(lifecycle, new ContextBuilder(config, undefined, getSafeFilePath), engine, logger);
+    const requests = new RequestManager(engine, config);
+    const completionProvider = new DeinsCompleteInlineCompletionProvider(lifecycle, new ContextBuilder(config, undefined, getSafeFilePath), requests, logger);
     statusBar.update(lifecycle.getState());
 
     context.subscriptions.push(
       statusBar,
+      { dispose: () => requests.dispose() },
       lifecycle.start(),
       lifecycle.onDidChangeState((state) => statusBar.update(state)),
       vscode.languages.registerInlineCompletionItemProvider({ scheme: "file" }, completionProvider),

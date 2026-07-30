@@ -50,7 +50,11 @@
           "minimum": 500,
           "maximum": 30000,
           "description": "Maximum time to wait for a DeinsComplete backend completion request."
-        }
+        },
+        "deinscomplete.completion.debounceMs": { "type": "number", "default": 150, "minimum": 0, "maximum": 2000, "description": "Delay before requesting an inline completion." },
+        "deinscomplete.cache.enabled": { "type": "boolean", "default": true, "description": "Cache recent inline completions in memory." },
+        "deinscomplete.cache.ttlMs": { "type": "number", "default": 60000, "minimum": 1000, "maximum": 300000, "description": "Completion cache lifetime in milliseconds." },
+        "deinscomplete.cache.maxEntries": { "type": "number", "default": 100, "minimum": 10, "maximum": 1000, "description": "Maximum in-memory completion cache entries." }
       }
     }
   },
