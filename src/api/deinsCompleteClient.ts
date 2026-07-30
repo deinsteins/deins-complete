@@ -30,22 +30,33 @@ export interface BackendClient {
 type FetchFunction = (input: string, init?: RequestInit) => Promise<Response>;
 
 export class DeinsCompleteClient implements BackendClient {
+  private token?: string;
   constructor(
     private readonly settings: BackendSettingsProvider,
     private readonly fetchFunction: FetchFunction = globalThis.fetch,
     private readonly logger?: ApiLogger,
+    private readonly clientVersion = "0.0.0",
   ) {}
 
   async complete(request: ApiCompletionRequest, signal: AbortSignal): Promise<ApiCompletionResponse> {
     const startedAt = Date.now();
     const response = await this.send("/v1/completions", {
       method: "POST",
-      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      headers: this.headers({ "Content-Type": "application/json", Accept: "application/json" }),
       body: JSON.stringify(request),
     }, signal);
     const payload = await this.parseCompletionResponse(response);
     this.logger?.debug(`Backend completion completed status=${response.status} durationMs=${Date.now() - startedAt} requestId=${payload.requestId ?? "none"}`);
     return payload;
+  }
+  setInstallationToken(token: string | undefined): void { this.token = token; }
+  async registerInstallation(installationId: string, signal?: AbortSignal): Promise<string> {
+    const response = await this.send("/v1/installations/register", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify({ installationId, client: { name: "deinscomplete-vscode", version: this.clientVersion } }),
+    }, signal);
+    const payload=await this.parseJSON(response);if(!isRecord(payload)||!isRecord(payload.installation)||payload.installation.id!==installationId||typeof payload.token!=="string"||payload.token==="")throw new InvalidResponseError("Installation response is invalid.");return payload.token;
   }
 
   async health(signal?: AbortSignal): Promise<BackendHealthResult> {
@@ -117,6 +128,7 @@ export class DeinsCompleteClient implements BackendClient {
   private requestId(response: Response): string | undefined {
     return response.headers.get("X-Request-ID") ?? undefined;
   }
+  private headers(headers: Record<string,string>): Record<string,string> { return this.token ? {...headers,Authorization:`Bearer ${this.token}`} : headers; }
 }
 
 function createRequestCancellation(source: AbortSignal | undefined, timeoutMs: number): { signal: AbortSignal; timedOut(): boolean; dispose(): void } {

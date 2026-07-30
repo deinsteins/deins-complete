@@ -2,7 +2,7 @@
 
 Fast AI-powered inline code completion for VS Code.
 
-The VS Code extension remains at the repository root. The standalone Go gateway lives in `api/`, and the language-neutral HTTP contract lives in `contracts/openapi.yaml`. The extension intentionally continues using its local mock engine until a later phase connects it to the API.
+The VS Code extension remains at the repository root. The standalone Go gateway lives in `api/`, and the language-neutral HTTP contract lives in `contracts/openapi.yaml`. The extension sends bounded completion context to the gateway; `AI_PROVIDER=mock` keeps local development deterministic.
 
 ## Backend development
 
@@ -43,3 +43,16 @@ ANTHROPIC_VERSION=2023-06-01
 These are backend-operator settings only. VS Code users do not configure an upstream provider, model, base URL, or API key. The backend sends only bounded `language`, `prefix`, and `suffix` context to the configured provider.
 
 Provider output is sanitized before it reaches ghost text: obvious Markdown fences, common explanation labels, surrounding-code overlap, excessive blank lines, and oversized completions are removed conservatively.
+
+## Installation authentication
+
+The extension creates a random installation ID and stores its issued credential in VS Code SecretStorage. With `AUTH_ENABLED=true`, the API requires that credential for completion requests while `/health`, `/ready`, and installation registration remain public. Configure the backend only:
+
+```env
+AUTH_ENABLED=true
+AUTH_TOKEN_SECRET=
+AUTH_TOKEN_TTL_HOURS=0
+AUTH_TOKEN_VERSION=1
+```
+
+Use a high-entropy secret of at least 32 bytes (for example, `openssl rand -hex 32`). `AUTH_TOKEN_TTL_HOURS=0` disables expiry. Production refuses to start with authentication disabled. The installation ID is random and is not derived from a user, device, or workspace.

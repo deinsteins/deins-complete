@@ -24,7 +24,7 @@ func (providerErrorProvider) Complete(context.Context, completion.Request) (comp
 
 func testRouter() http.Handler {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	return newRouter(logger, completion.NewService(providers.MockProvider{}), auth.New("", 1), false)
+	return newRouter(logger, completion.NewService(providers.MockProvider{}), auth.New("", 1, 0), false)
 }
 
 func TestHealthAndReady(t *testing.T) {
@@ -98,7 +98,7 @@ func TestMethodNotAllowedReturnsJSON(t *testing.T) {
 
 func TestProviderErrorsUseSafeAPIResponses(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	router := newRouter(logger, completion.NewService(providerErrorProvider{}), auth.New("", 1), false)
+	router := newRouter(logger, completion.NewService(providerErrorProvider{}), auth.New("", 1, 0), false)
 	body := `{"context":{"prefix":"const user =","suffix":"","language":"typescript","filePath":"test.ts","cursorOffset":12}}`
 	response := httptest.NewRecorder()
 	router.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/v1/completions", strings.NewReader(body)))
@@ -112,5 +112,35 @@ func TestOversizedCompletionBody(t *testing.T) {
 	testRouter().ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/v1/completions", bytes.NewReader(make([]byte, 256*1024+1))))
 	if response.Code != http.StatusRequestEntityTooLarge {
 		t.Fatalf("got %d", response.Code)
+	}
+}
+
+func TestAuthenticatedCompletionAndRegistration(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	service := auth.New("01234567890123456789012345678901", 1, 0)
+	router := newRouter(logger, completion.NewService(providers.MockProvider{}), service, true)
+	registration := httptest.NewRecorder()
+	router.ServeHTTP(registration, httptest.NewRequest(http.MethodPost, "/v1/installations/register", strings.NewReader(`{"installationId":"installation-1"}`)))
+	if registration.Code != http.StatusOK {
+		t.Fatalf("registration: %d", registration.Code)
+	}
+	var payload struct {
+		Token string `json:"token"`
+	}
+	if err := json.NewDecoder(registration.Body).Decode(&payload); err != nil || payload.Token == "" {
+		t.Fatalf("invalid registration response: %v", err)
+	}
+	body := `{"context":{"prefix":"const user =","suffix":"","language":"typescript","filePath":"test.ts","cursorOffset":12}}`
+	missing := httptest.NewRecorder()
+	router.ServeHTTP(missing, httptest.NewRequest(http.MethodPost, "/v1/completions", strings.NewReader(body)))
+	if missing.Code != http.StatusUnauthorized {
+		t.Fatalf("missing auth: %d", missing.Code)
+	}
+	authorized := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/v1/completions", strings.NewReader(body))
+	req.Header.Set("Authorization", "Bearer "+payload.Token)
+	router.ServeHTTP(authorized, req)
+	if authorized.Code != http.StatusOK {
+		t.Fatalf("authorized completion: %d", authorized.Code)
 	}
 }

@@ -13,6 +13,7 @@ import (
 type Service struct {
 	secret  []byte
 	version int
+	ttl     time.Duration
 }
 type claims struct {
 	ID      string `json:"sub"`
@@ -20,8 +21,8 @@ type claims struct {
 	Version int    `json:"ver"`
 }
 
-func New(secret string, version int) *Service {
-	return &Service{secret: []byte(secret), version: version}
+func New(secret string, version int, ttl time.Duration) *Service {
+	return &Service{secret: []byte(secret), version: version, ttl: ttl}
 }
 func (s *Service) Issue(id string) (string, error) {
 	p, e := json.Marshal(claims{ID: id, Issued: time.Now().Unix(), Version: s.version})
@@ -49,7 +50,10 @@ func (s *Service) Validate(token string) (string, error) {
 		return "", e
 	}
 	var c claims
-	if json.Unmarshal(p, &c) != nil || c.ID == "" || c.Version != s.version {
+	if json.Unmarshal(p, &c) != nil || c.ID == "" || c.Issued <= 0 || c.Version != s.version {
+		return "", errors.New("invalid")
+	}
+	if s.ttl > 0 && time.Now().After(time.Unix(c.Issued, 0).Add(s.ttl)) {
 		return "", errors.New("invalid")
 	}
 	return c.ID, nil

@@ -16,8 +16,24 @@ paths:
     get:
       responses:
         '200': { description: Process is ready }
+  /v1/installations/register:
+    post:
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/InstallationRegistrationRequest' }
+      responses:
+        '200':
+          description: Installation registered.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/InstallationRegistrationResponse' }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
   /v1/completions:
     post:
+      security:
+        - BearerAuth: []
       requestBody:
         required: true
         content:
@@ -39,6 +55,23 @@ paths:
         '504': { $ref: '#/components/responses/ProviderTimeout' }
 components:
   schemas:
+    InstallationIdentity:
+      type: object
+      required: [id]
+      properties:
+        id: { type: string, maxLength: 128 }
+    InstallationRegistrationRequest:
+      type: object
+      required: [installationId]
+      properties:
+        installationId: { type: string, minLength: 1, maxLength: 128 }
+        client: { $ref: '#/components/schemas/Client' }
+    InstallationRegistrationResponse:
+      type: object
+      required: [installation, token]
+      properties:
+        installation: { $ref: '#/components/schemas/InstallationIdentity' }
+        token: { type: string, description: Installation credential; store securely. }
     CompletionContext:
       type: object
       required: [prefix, suffix, language, filePath, cursorOffset]
@@ -102,3 +135,7 @@ components:
     ProviderTimeout:
       description: Completion provider timed out
       content: { application/json: { schema: { $ref: '#/components/schemas/ApiErrorResponse' } } }
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer

@@ -32,9 +32,10 @@ type Config struct {
 	Auth        AuthConfig
 }
 type AuthConfig struct {
-	Enabled bool
-	Secret  string
-	Version int
+	Enabled  bool
+	Secret   string
+	Version  int
+	TokenTTL time.Duration
 }
 
 func Load() (Config, error) {
@@ -81,6 +82,13 @@ func parse(lookup func(string) string) (Config, error) {
 			return Config{}, fmt.Errorf("invalid AUTH_TOKEN_VERSION value: %s", raw)
 		}
 		config.Auth.Version = v
+	}
+	if raw := lookup("AUTH_TOKEN_TTL_HOURS"); raw != "" {
+		hours, err := strconv.Atoi(raw)
+		if err != nil || hours < 0 || hours > 8760 {
+			return Config{}, fmt.Errorf("invalid AUTH_TOKEN_TTL_HOURS value: %s", raw)
+		}
+		config.Auth.TokenTTL = time.Duration(hours) * time.Hour
 	}
 	if config.Environment == "production" && !config.Auth.Enabled {
 		return Config{}, fmt.Errorf("AUTH_ENABLED must be true in production")

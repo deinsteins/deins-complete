@@ -1,4 +1,4 @@
-import { ApiError, CancelledError, TimeoutError } from "../api/apiErrors";
+import { ApiError, CancelledError, TimeoutError, UnauthorizedError } from "../api/apiErrors";
 import { ApiCompletionRequest, ApiLogger } from "../api/apiTypes";
 import { BackendClient } from "../api/deinsCompleteClient";
 import { CompletionEngine } from "./completionEngine";
@@ -9,13 +9,27 @@ export class BackendCompletionEngine implements CompletionEngine {
     private readonly client: BackendClient,
     private readonly extensionVersion: string,
     private readonly logger: ApiLogger,
+    private readonly ensureAuthentication?: (signal: AbortSignal) => Promise<void>,
+    private readonly refreshAuthentication?: (signal: AbortSignal) => Promise<void>,
   ) {}
 
   async complete(request: CompletionRequest, signal: AbortSignal): Promise<CompletionResult | null> {
     try {
+      await this.ensureAuthentication?.(signal);
       const response = await this.client.complete(toApiCompletionRequest(request, this.extensionVersion), signal);
       return response.completion.text === "" ? null : { text: response.completion.text };
     } catch (error) {
+      if (error instanceof UnauthorizedError && this.refreshAuthentication !== undefined && !signal.aborted) {
+        try {
+          await this.refreshAuthentication(signal);
+          const response = await this.client.complete(toApiCompletionRequest(request, this.extensionVersion), signal);
+          return response.completion.text === "" ? null : { text: response.completion.text };
+        } catch (refreshError) {
+          if (refreshError instanceof CancelledError || signal.aborted) return null;
+          this.logger.debug("Backend authentication refresh failed");
+          return null;
+        }
+      }
       if (error instanceof CancelledError || signal.aborted) {
         this.logger.debug("Backend completion cancelled");
         return null;
