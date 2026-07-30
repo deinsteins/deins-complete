@@ -11,6 +11,7 @@ import (
 	"strings"
 	"testing"
 
+	"deinscomplete/api/internal/auth"
 	"deinscomplete/api/internal/completion"
 	"deinscomplete/api/internal/completion/providers"
 )
@@ -23,7 +24,7 @@ func (providerErrorProvider) Complete(context.Context, completion.Request) (comp
 
 func testRouter() http.Handler {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	return newRouter(logger, completion.NewService(providers.MockProvider{}))
+	return newRouter(logger, completion.NewService(providers.MockProvider{}), auth.New("", 1), false)
 }
 
 func TestHealthAndReady(t *testing.T) {
@@ -97,7 +98,7 @@ func TestMethodNotAllowedReturnsJSON(t *testing.T) {
 
 func TestProviderErrorsUseSafeAPIResponses(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	router := newRouter(logger, completion.NewService(providerErrorProvider{}))
+	router := newRouter(logger, completion.NewService(providerErrorProvider{}), auth.New("", 1), false)
 	body := `{"context":{"prefix":"const user =","suffix":"","language":"typescript","filePath":"test.ts","cursorOffset":12}}`
 	response := httptest.NewRecorder()
 	router.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/v1/completions", strings.NewReader(body)))

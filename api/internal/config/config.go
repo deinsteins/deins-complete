@@ -29,6 +29,12 @@ type Config struct {
 	Port        int
 	LogLevel    string
 	AI          AIConfig
+	Auth        AuthConfig
+}
+type AuthConfig struct {
+	Enabled bool
+	Secret  string
+	Version int
 }
 
 func Load() (Config, error) {
@@ -50,6 +56,7 @@ func parse(lookup func(string) string) (Config, error) {
 			Temperature:        0.1,
 			MaxCompletionLines: 20, MaxCompletionChars: 8000,
 		},
+		Auth: AuthConfig{Enabled: lookup("AUTH_ENABLED") == "true", Secret: lookup("AUTH_TOKEN_SECRET"), Version: 1},
 	}
 
 	if rawPort := lookup("PORT"); rawPort != "" {
@@ -67,6 +74,19 @@ func parse(lookup func(string) string) (Config, error) {
 	}
 	if config.LogLevel != "debug" && config.LogLevel != "info" && config.LogLevel != "warn" && config.LogLevel != "error" {
 		return Config{}, fmt.Errorf("invalid LOG_LEVEL value: %s", config.LogLevel)
+	}
+	if raw := lookup("AUTH_TOKEN_VERSION"); raw != "" {
+		v, e := strconv.Atoi(raw)
+		if e != nil || v < 1 {
+			return Config{}, fmt.Errorf("invalid AUTH_TOKEN_VERSION value: %s", raw)
+		}
+		config.Auth.Version = v
+	}
+	if config.Environment == "production" && !config.Auth.Enabled {
+		return Config{}, fmt.Errorf("AUTH_ENABLED must be true in production")
+	}
+	if config.Auth.Enabled && len(config.Auth.Secret) < 32 {
+		return Config{}, fmt.Errorf("AUTH_TOKEN_SECRET must be at least 32 bytes when auth is enabled")
 	}
 	if err := parseAIConfig(&config.AI, config.Environment, lookup); err != nil {
 		return Config{}, err

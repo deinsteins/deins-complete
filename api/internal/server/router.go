@@ -6,19 +6,25 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"deinscomplete/api/internal/auth"
 	"deinscomplete/api/internal/completion"
 	"deinscomplete/api/internal/http/handlers"
 	"deinscomplete/api/internal/http/middleware"
 	"deinscomplete/api/internal/http/response"
 )
 
-func newRouter(logger *slog.Logger, service *completion.Service) http.Handler {
+func newRouter(logger *slog.Logger, service *completion.Service, authService *auth.Service, enabled bool) http.Handler {
 	router := chi.NewRouter()
 	router.Use(middleware.RequestID, middleware.Recovery(logger), middleware.Logging(logger))
 	router.Get("/", handlers.Root)
 	router.Get("/health", handlers.Health)
 	router.Get("/ready", handlers.Ready)
-	router.Post("/v1/completions", handlers.NewCompletionHandler(service, logger).ServeHTTP)
+	router.Post("/v1/installations/register", handlers.RegisterInstallations(authService))
+	completionHandler := http.Handler(handlers.NewCompletionHandler(service, logger))
+	if enabled {
+		completionHandler = middleware.Auth(authService)(completionHandler)
+	}
+	router.Post("/v1/completions", completionHandler.ServeHTTP)
 	router.NotFound(func(writer http.ResponseWriter, request *http.Request) {
 		response.WriteError(writer, http.StatusNotFound, "NOT_FOUND", "Route not found.", middleware.GetRequestID(request.Context()))
 	})
