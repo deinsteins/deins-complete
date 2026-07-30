@@ -4,7 +4,7 @@ Runtime: Ubuntu ARM64 on EC2 t4g.small, Docker Compose, Caddy, and the Go API on
 
 On the server, retain the existing `/app/deinscomplete/.env`; CI never copies or overwrites it. Add the non-secret image repository to the deployment shell when rolling back: `export DEINSCOMPLETE_IMAGE_REPOSITORY=ghcr.io/<owner>/<repository>/api`.
 
-Required GitHub Actions secrets: `EC2_HOST`, `EC2_USER`, `EC2_SSH_PRIVATE_KEY`, and trusted `EC2_KNOWN_HOSTS`. Provider credentials and the auth secret remain only in the EC2 `.env`. For private GHCR images, authenticate Docker on EC2 once with a token that has package read access.
+Required GitHub Actions secrets: `EC2_HOST`, `EC2_USER`, `EC2_SSH_PRIVATE_KEY_BASE64`, and trusted `EC2_KNOWN_HOSTS`. Create the base64 value locally with `base64 -w 0 ~/.ssh/<deployment-private-key>` (macOS: `base64 < ~/.ssh/<deployment-private-key> | tr -d '\n'`). Provider credentials and the auth secret remain only in the EC2 `.env`. For private GHCR images, authenticate Docker on EC2 once with a token that has package read access.
 
 Deploy an immutable image:
 
