@@ -2,6 +2,8 @@
 
 Fast AI-powered inline code completion for VS Code.
 
+Production deployment instructions are in `docs/aws-ec2-deployment.md`, `docs/private-beta.md`, and `docs/release-checklist.md`.
+
 The VS Code extension remains at the repository root. The standalone Go gateway lives in `api/`, and the language-neutral HTTP contract lives in `contracts/openapi.yaml`. The extension sends bounded completion context to the gateway; `AI_PROVIDER=mock` keeps local development deterministic.
 
 ## Backend development

@@ -1,10 +1,25 @@
 services:
-  deinscomplete-api:
-    image: deinscomplete-api:${DEINSCOMPLETE_VERSION:-0.1.0-beta.1}
+  api:
+    image: ${DEINSCOMPLETE_API_IMAGE:?set DEINSCOMPLETE_API_IMAGE in the deployment environment}
     env_file: .env
-    ports:
-      - "127.0.0.1:8080:8080"
+    expose: ["8080"]
     restart: unless-stopped
     read_only: true
     security_opt:
       - no-new-privileges:true
+    tmpfs: ["/tmp"]
+    networks: [deinscomplete]
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports: ["80:80", "443:443"]
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks: [deinscomplete]
+networks:
+  deinscomplete:
+volumes:
+  caddy_data:
+  caddy_config:
