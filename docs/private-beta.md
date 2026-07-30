@@ -7,4 +7,4 @@
 
 CLI alternative: `code --install-extension deinscomplete-<version>.vsix`.
 
-This private beta sends bounded cursor-adjacent code context to the DeinsComplete backend, which may forward it to configured AI providers. Do not use it with code you are not authorized to send for AI processing.
+This private beta sends bounded cursor-adjacent code context to the DeinsComplete backend, which may forward it to configured AI providers. Repository Context is enabled by default and may add small snippets from relevant local imports and open workspace files; it never uploads or indexes the entire repository. Disable it per workspace with `deinscomplete.repositoryContext.enabled`. Do not use it with code you are not authorized to send for AI processing.

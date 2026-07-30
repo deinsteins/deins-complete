@@ -101,7 +101,15 @@ func (p *Provider) Complete(ctx context.Context, req completion.Request) (comple
 const systemPrompt = "You are a code completion engine. Return only code inserted at the cursor. Do not explain, use Markdown, or repeat surrounding code. Prefer the smallest useful completion."
 
 func userPrompt(r completion.Request) string {
-	return "Language: " + r.Context.Language + "\n\n<PREFIX>\n" + r.Context.Prefix + "\n</PREFIX>\n\n<SUFFIX>\n" + r.Context.Suffix + "\n</SUFFIX>\n\nReturn only the code inserted between PREFIX and SUFFIX."
+	prompt := "Language: " + r.Context.Language + "\n\n<PREFIX>\n" + r.Context.Prefix + "\n</PREFIX>\n\n<SUFFIX>\n" + r.Context.Suffix + "\n</SUFFIX>"
+	if r.RepositoryContext != nil && len(r.RepositoryContext.Files) > 0 {
+		prompt += "\n\n<REPOSITORY_CONTEXT>"
+		for _, file := range r.RepositoryContext.Files {
+			prompt += "\n<FILE path=\"" + file.Path + "\" language=\"" + file.Language + "\">\n" + file.Content + "\n</FILE>"
+		}
+		prompt += "\n</REPOSITORY_CONTEXT>"
+	}
+	return prompt + "\n\nReturn only the code inserted between PREFIX and SUFFIX."
 }
 func normalizeBaseURL(v string) (string, error) {
 	u, e := url.Parse(v)

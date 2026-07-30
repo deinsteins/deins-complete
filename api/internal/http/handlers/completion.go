@@ -47,7 +47,14 @@ func (handler *CompletionHandler) ServeHTTP(writer http.ResponseWriter, request 
 		return
 	}
 
-	handler.logger.Debug("completion requested", "request_id", requestID, "language", completionRequest.Context.Language, "prefix_length", len(completionRequest.Context.Prefix), "suffix_length", len(completionRequest.Context.Suffix))
+	repositoryFiles, repositoryChars := 0, 0
+	if completionRequest.RepositoryContext != nil {
+		repositoryFiles = len(completionRequest.RepositoryContext.Files)
+		for _, file := range completionRequest.RepositoryContext.Files {
+			repositoryChars += len(file.Content)
+		}
+	}
+	handler.logger.Debug("completion requested", "request_id", requestID, "language", completionRequest.Context.Language, "prefix_length", len(completionRequest.Context.Prefix), "suffix_length", len(completionRequest.Context.Suffix), "repository_files", repositoryFiles, "repository_chars", repositoryChars)
 	result, err := handler.service.Complete(request.Context(), completionRequest)
 	if err != nil {
 		if request.Context().Err() != nil {

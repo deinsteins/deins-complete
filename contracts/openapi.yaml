@@ -86,6 +86,34 @@ components:
         language: { type: string, minLength: 1, maxLength: 100 }
         filePath: { type: string, maxLength: 4096, description: Workspace-relative path or filename only; never an absolute machine-local path. }
         cursorOffset: { type: integer, minimum: 0, description: Original document offset, not a context-relative offset. }
+    RepositoryContextFile:
+      type: object
+      required: [path, language, content, reason]
+      properties:
+        path: { type: string, maxLength: 4096, description: Workspace-relative path only. }
+        language: { type: string, maxLength: 100 }
+        content: { type: string, maxLength: 10000 }
+        reason: { type: string, maxLength: 100 }
+    RepositorySymbol:
+      type: object
+      required: [name, kind, filePath]
+      properties:
+        name: { type: string, maxLength: 300 }
+        kind: { type: string, maxLength: 100 }
+        filePath: { type: string, maxLength: 4096 }
+        signature: { type: string, maxLength: 1000 }
+    RepositoryContext:
+      type: object
+      required: [files]
+      properties:
+        files:
+          type: array
+          maxItems: 8
+          items: { $ref: '#/components/schemas/RepositoryContextFile' }
+        symbols:
+          type: array
+          maxItems: 100
+          items: { $ref: '#/components/schemas/RepositorySymbol' }
     Client:
       type: object
       properties:
@@ -96,6 +124,7 @@ components:
       required: [context]
       properties:
         context: { $ref: '#/components/schemas/CompletionContext' }
+        repositoryContext: { $ref: '#/components/schemas/RepositoryContext', description: Optional bounded context from relevant workspace files. }
         client: { $ref: '#/components/schemas/Client' }
     CompletionResult:
       type: object

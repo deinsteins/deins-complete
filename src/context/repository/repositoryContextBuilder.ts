@@ -1,0 +1,170 @@
+import { createHash } from "node:crypto";
+import * as path from "node:path";
+import * as vscode from "vscode";
+import { CompletionContext, RepositoryContext, RepositoryContextFile, RepositoryContextReason, RepositorySymbol } from "../contextTypes";
+import { RepositoryContextSettings } from "./repositoryContextConfig";
+
+const maxFileBytes = 1024 * 1024;
+const perFileCharacters = 3000;
+const ignoredSegments = new Set(["node_modules", ".git", "dist", "build", ".next", "coverage", "vendor", "target"]);
+const sensitiveNames = /^(\.env(?:\..*)?|id_rsa|id_ed25519|credentials(?:\..*)?|secrets(?:\..*)?)$/i;
+const sensitiveExtensions = /\.(pem|key|p12|pfx)$/i;
+
+type ImportReference = { specifier: string; names: string[] };
+type Candidate = { uri: vscode.Uri; reason: RepositoryContextReason; names: string[]; score: number };
+type CachedText = { text: string; version?: number };
+
+/** Lightweight workspace signals only: imports and already-open/recent documents. */
+export class RepositoryContextBuilder {
+  private readonly recent = new Map<string, vscode.Uri>();
+  private readonly cache = new Map<string, CachedText>();
+  private readonly stats = { requests: 0, success: 0, partial: 0, timedOut: 0, filesIncluded: 0, totalDurationMs: 0, lastFiles: 0, lastCharacters: 0, lastDurationMs: 0 };
+
+  constructor(private readonly settings: RepositoryContextSettings) {}
+
+  record(document: vscode.TextDocument): void {
+    if (!this.isWorkspaceFile(document.uri)) return;
+    this.recent.delete(document.uri.toString());
+    this.recent.set(document.uri.toString(), document.uri);
+    while (this.recent.size > 20) this.recent.delete(this.recent.keys().next().value as string);
+  }
+
+  invalidate(uri: vscode.Uri): void { this.cache.delete(uri.toString()); }
+  getStats() { return { ...this.stats }; }
+
+  async build(document: vscode.TextDocument, current: CompletionContext, signal: AbortSignal): Promise<RepositoryContext | undefined> {
+    const limits = this.settings.getRepositoryContextLimits();
+    if (!limits.enabled || signal.aborted || !this.isWorkspaceFile(document.uri)) return undefined;
+    this.stats.requests++;
+    const started = performance.now();
+    const expired = () => signal.aborted || performance.now() - started >= limits.timeoutMs;
+    this.record(document);
+    const candidates = new Map<string, Candidate>();
+    const add = (candidate: Candidate) => {
+      if (candidate.uri.toString() === document.uri.toString() || !this.isEligible(candidate.uri)) return;
+      const previous = candidates.get(candidate.uri.toString());
+      if (previous === undefined || candidate.score > previous.score) candidates.set(candidate.uri.toString(), candidate);
+    };
+
+    for (const reference of extractLocalImports(document.getText())) {
+      if (expired()) break;
+      const uri = await this.resolveImport(document.uri, reference.specifier);
+      if (uri !== undefined) add({ uri, reason: "import", names: reference.names, score: 110 });
+    }
+    for (const uri of [...this.recent.values()].reverse()) {
+      if (expired()) break;
+      const open = vscode.workspace.textDocuments.find((item) => item.uri.toString() === uri.toString());
+      if (open !== undefined && open.uri.toString() !== document.uri.toString()) {
+        add({ uri, reason: "open-file", names: identifiersNearCursor(current), score: 40 + (open.languageId === document.languageId ? 10 : 0) });
+      }
+    }
+
+    const files: RepositoryContextFile[] = [];
+    const symbols: RepositorySymbol[] = [];
+    let characters = 0;
+    for (const candidate of [...candidates.values()].sort((a, b) => b.score - a.score)) {
+      if (expired() || files.length >= limits.maxFiles || characters >= limits.maxCharacters) break;
+      const text = await this.readText(candidate.uri);
+      if (text === undefined || containsSensitiveContent(text)) continue;
+      const remaining = Math.min(perFileCharacters, limits.maxCharacters - characters);
+      const content = selectSnippet(text, candidate.names, remaining);
+      if (content === "") continue;
+      const filePath = safeRelativePath(candidate.uri);
+      files.push({ path: filePath, language: languageFor(candidate.uri), content, reason: candidate.reason });
+      characters += content.length;
+      symbols.push(...extractSymbols(text, filePath, candidate.names));
+    }
+    if (signal.aborted) return undefined;
+    const fingerprint = createHash("sha256").update(files.map((file) => `${file.path}\0${file.content}`).join("\0")).digest("hex");
+    const durationMs = Math.round(performance.now() - started);
+    const timedOut = durationMs >= limits.timeoutMs;
+    this.stats.success++;
+    this.stats.filesIncluded += files.length;
+    this.stats.totalDurationMs += durationMs;
+    this.stats.lastFiles = files.length;
+    this.stats.lastCharacters = characters;
+    this.stats.lastDurationMs = durationMs;
+    if (timedOut) this.stats.timedOut++;
+    if (timedOut || files.length < candidates.size) this.stats.partial++;
+    return { files, symbols: dedupeSymbols(symbols).slice(0, 20), fingerprint, durationMs, timedOut };
+  }
+
+  private async resolveImport(from: vscode.Uri, specifier: string): Promise<vscode.Uri | undefined> {
+    const root = from.with({ path: path.posix.join(path.posix.dirname(from.path), specifier) });
+    const extensions = ["", ".ts", ".tsx", ".js", ".jsx", ".mts", ".cts", ".mjs", ".cjs", "/index.ts", "/index.tsx", "/index.js", "/index.jsx"];
+    for (const extension of extensions) {
+      const uri = root.with({ path: root.path + extension });
+      if (!this.isEligible(uri)) continue;
+      try {
+        const stat = await vscode.workspace.fs.stat(uri);
+        if (stat.size <= maxFileBytes && (stat.type & vscode.FileType.File) !== 0) return uri;
+      } catch { /* unresolved imports are normal */ }
+    }
+    return undefined;
+  }
+
+  private async readText(uri: vscode.Uri): Promise<string | undefined> {
+    const open = vscode.workspace.textDocuments.find((document) => document.uri.toString() === uri.toString());
+    if (open !== undefined) {
+      const cached = this.cache.get(uri.toString());
+      if (cached?.version === open.version) return cached.text;
+      const text = open.getText();
+      this.cache.set(uri.toString(), { text, version: open.version });
+      return text;
+    }
+    const cached = this.cache.get(uri.toString());
+    if (cached !== undefined) return cached.text;
+    try {
+      const bytes = await vscode.workspace.fs.readFile(uri);
+      const text = new TextDecoder().decode(bytes);
+      this.cache.set(uri.toString(), { text });
+      while (this.cache.size > 40) this.cache.delete(this.cache.keys().next().value as string);
+      return text;
+    } catch { return undefined; }
+  }
+
+  private isWorkspaceFile(uri: vscode.Uri): boolean { return vscode.workspace.getWorkspaceFolder(uri) !== undefined; }
+  private isEligible(uri: vscode.Uri): boolean {
+    if (!this.isWorkspaceFile(uri)) return false;
+    const parts = uri.path.split("/");
+    const name = parts.at(-1) ?? "";
+    return !parts.some((part) => ignoredSegments.has(part)) && !sensitiveNames.test(name) && !sensitiveExtensions.test(name);
+  }
+}
+
+function extractLocalImports(text: string): ImportReference[] {
+  const imports: ImportReference[] = [];
+  const pattern = /(?:import\s+([^'";]+?)\s+from\s+|import\s*\(|require\s*\()\s*["'](\.{1,2}\/[\w./-]+)["']/g;
+  for (const match of text.matchAll(pattern)) imports.push({ specifier: match[2], names: (match[1] ?? "").match(/[A-Za-z_$][\w$]*/g) ?? [] });
+  return imports;
+}
+
+function identifiersNearCursor(context: CompletionContext): string[] {
+  return `${context.currentLine}\n${context.prefix.slice(-500)}`.match(/[A-Za-z_$][\w$]*/g) ?? [];
+}
+
+function selectSnippet(text: string, names: string[], limit: number): string {
+  if (text.length <= limit) return text;
+  const lines = text.split(/\r?\n/);
+  const index = names.map((name) => lines.findIndex((line) => new RegExp(`\\b${escapeRegExp(name)}\\b`).test(line))).find((value) => value !== undefined && value >= 0);
+  const selected = index === undefined ? lines.filter((line) => /^\s*export\s+(?:function|class|interface|type|const)\b/.test(line)).slice(0, 20) : lines.slice(Math.max(0, index - 3), index + 12);
+  return selected.join("\n").slice(0, limit);
+}
+
+function extractSymbols(text: string, filePath: string, names: string[]): RepositorySymbol[] {
+  const wanted = new Set(names);
+  const symbols: RepositorySymbol[] = [];
+  for (const line of text.split(/\r?\n/)) {
+    const match = line.match(/^\s*export\s+(?:default\s+)?(function|class|interface|type|const)\s+([A-Za-z_$][\w$]*)/);
+    if (match !== null && (wanted.size === 0 || wanted.has(match[2]))) symbols.push({ name: match[2], kind: match[1], filePath, signature: line.trim().slice(0, 300) });
+  }
+  return symbols;
+}
+
+function dedupeSymbols(symbols: RepositorySymbol[]): RepositorySymbol[] {
+  return [...new Map(symbols.map((symbol) => [`${symbol.filePath}\0${symbol.kind}\0${symbol.name}`, symbol])).values()];
+}
+function safeRelativePath(uri: vscode.Uri): string { return vscode.workspace.asRelativePath(uri, vscode.workspace.workspaceFolders?.length !== 1).replace(/\\/g, "/"); }
+function languageFor(uri: vscode.Uri): string { return path.posix.extname(uri.path).slice(1) || "text"; }
+function containsSensitiveContent(text: string): boolean { return /-----BEGIN (?:[A-Z ]+ )?PRIVATE KEY-----|(?:API_KEY|SECRET|PASSWORD)\s*=/i.test(text); }
+function escapeRegExp(value: string): string { return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); }

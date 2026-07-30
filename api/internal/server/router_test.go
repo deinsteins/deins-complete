@@ -77,6 +77,8 @@ func TestCompletionValidationAndUnknownRoute(t *testing.T) {
 		{"missing context", "/v1/completions", `{}`, http.StatusBadRequest},
 		{"empty language", "/v1/completions", `{"context":{"prefix":"","suffix":"","language":"","filePath":"","cursorOffset":0}}`, http.StatusBadRequest},
 		{"negative cursor", "/v1/completions", `{"context":{"prefix":"","suffix":"","language":"ts","filePath":"","cursorOffset":-1}}`, http.StatusBadRequest},
+		{"absolute repository path", "/v1/completions", `{"context":{"prefix":"","suffix":"","language":"ts","filePath":"","cursorOffset":0},"repositoryContext":{"files":[{"path":"/private/key.ts","language":"ts","content":"export const x=1","reason":"import"}]}}`, http.StatusBadRequest},
+		{"oversized repository files", "/v1/completions", `{"context":{"prefix":"","suffix":"","language":"ts","filePath":"","cursorOffset":0},"repositoryContext":{"files":[{"path":"a.ts","language":"ts","content":"x","reason":"import"},{"path":"b.ts","language":"ts","content":"x","reason":"import"},{"path":"c.ts","language":"ts","content":"x","reason":"import"},{"path":"d.ts","language":"ts","content":"x","reason":"import"},{"path":"e.ts","language":"ts","content":"x","reason":"import"},{"path":"f.ts","language":"ts","content":"x","reason":"import"},{"path":"g.ts","language":"ts","content":"x","reason":"import"},{"path":"h.ts","language":"ts","content":"x","reason":"import"},{"path":"i.ts","language":"ts","content":"x","reason":"import"}]}}`, http.StatusBadRequest},
 		{"unknown route", "/unknown", "", http.StatusNotFound},
 	}
 	for _, testCase := range cases {

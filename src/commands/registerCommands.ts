@@ -5,6 +5,7 @@ import { DeinsCompleteLifecycle } from "../core/lifecycle";
 import { Logger } from "../logging/logger";
 import { RequestManager } from "../completion/requestManager";
 import { InstallationService } from "../identity/installationService";
+import { RepositoryContextBuilder } from "../context/repository/repositoryContextBuilder";
 
 export function registerCommands(
   config: ConfigService,
@@ -13,6 +14,7 @@ export function registerCommands(
   backendClient: BackendClient,
   requests: RequestManager,
   installation: InstallationService,
+  repositoryContext: RepositoryContextBuilder,
 ): vscode.Disposable[] {
   return [
     vscode.commands.registerCommand("deinscomplete.enable", async () => {
@@ -33,7 +35,8 @@ export function registerCommands(
       try { const health = await backendClient.health(); backend = `Reachable (${health.latencyMs} ms)`; } catch { /* diagnostic remains safe */ }
       const authentication = await installation.getToken() ? "Ready" : "Not registered";
       const average = stats.requested ? Math.round(stats.totalLatencyMs / stats.requested) : 0;
-      const report = `DeinsComplete Diagnostics\nStatus: ${lifecycle.getState()}\nBackend: ${backend}\nAuthentication: ${authentication}\nRequests: ${stats.requested}\nCache hits: ${stats.cacheHits}\nCancelled: ${stats.cancelled}\nAverage completion latency: ${average} ms`;
+      const repository = repositoryContext.getStats();
+      const report = `DeinsComplete Diagnostics\nStatus: ${lifecycle.getState()}\nBackend: ${backend}\nAuthentication: ${authentication}\nRequests: ${stats.requested}\nCache hits: ${stats.cacheHits}\nCancelled: ${stats.cancelled}\nAverage completion latency: ${average} ms\nRepository Context\nLast files included: ${repository.lastFiles}\nLast chars: ${repository.lastCharacters}\nLast build time: ${repository.lastDurationMs} ms\nTimeouts: ${repository.timedOut}`;
       logger.info(report); void vscode.window.showInformationMessage(`DeinsComplete diagnostics: ${backend}`);
     }),
     vscode.commands.registerCommand("deinscomplete.resetAuthentication", async () => {

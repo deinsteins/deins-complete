@@ -46,3 +46,21 @@ test("API request mapping sends only contract fields and a safe path", () => {
     client: { name: "deinscomplete-vscode", version: "0.0.1" },
   });
 });
+
+test("API request mapping includes bounded repository context but not its cache fingerprint", () => {
+  const withRepository: CompletionRequest = {
+    ...request,
+    repositoryContext: {
+      files: [{ path: "src/types/user.ts", language: "typescript", content: "export interface User { id: string }", reason: "import" }],
+      symbols: [{ name: "User", kind: "interface", filePath: "src/types/user.ts", signature: "export interface User" }],
+      fingerprint: "private-cache-key",
+      durationMs: 12,
+      timedOut: false,
+    },
+  };
+  assert.deepEqual(toApiCompletionRequest(withRepository, "0.0.1").repositoryContext, {
+    files: [{ path: "src/types/user.ts", language: "typescript", content: "export interface User { id: string }", reason: "import" }],
+    symbols: [{ name: "User", kind: "interface", filePath: "src/types/user.ts", signature: "export interface User" }],
+  });
+  assert.equal(JSON.stringify(toApiCompletionRequest(withRepository, "0.0.1")).includes("private-cache-key"), false);
+});

@@ -3,11 +3,12 @@ import { BackendSettingsProvider } from "../api/apiTypes";
 import { defaultBackendSettings, normalizeBackendTimeout } from "./backendConfig";
 import { ContextLimits, ContextLimitsProvider, defaultContextLimits, normalizeContextLimits } from "../context/contextConfig";
 import { EnabledConfiguration } from "./configTypes";
+import { defaultRepositoryContextLimits, normalizeRepositoryContextLimits, RepositoryContextLimits, RepositoryContextSettings } from "../context/repository/repositoryContextConfig";
 
 const namespace = "deinscomplete";
 const enabledSetting = "enabled";
 
-export class ConfigService implements EnabledConfiguration, ContextLimitsProvider, BackendSettingsProvider {
+export class ConfigService implements EnabledConfiguration, ContextLimitsProvider, BackendSettingsProvider, RepositoryContextSettings {
   debounceMs(){return Math.max(0,Math.min(2000,vscode.workspace.getConfiguration(namespace).get<number>("completion.debounceMs",150)))}
   cacheEnabled(){return vscode.workspace.getConfiguration(namespace).get<boolean>("cache.enabled",true)}
   cacheTtlMs(){const v=vscode.workspace.getConfiguration(namespace).get<number>("cache.ttlMs",60000);return v>=1000&&v<=300000?v:60000}
@@ -25,6 +26,16 @@ export class ConfigService implements EnabledConfiguration, ContextLimitsProvide
     return normalizeContextLimits({
       maxPrefixCharacters: configuration.get<number>("context.maxPrefixCharacters", defaultContextLimits.maxPrefixCharacters),
       maxSuffixCharacters: configuration.get<number>("context.maxSuffixCharacters", defaultContextLimits.maxSuffixCharacters),
+    });
+  }
+
+  getRepositoryContextLimits(): RepositoryContextLimits {
+    const configuration = vscode.workspace.getConfiguration(namespace);
+    return normalizeRepositoryContextLimits({
+      enabled: configuration.get<boolean>("repositoryContext.enabled", defaultRepositoryContextLimits.enabled),
+      maxFiles: configuration.get<number>("repositoryContext.maxFiles", defaultRepositoryContextLimits.maxFiles),
+      maxCharacters: configuration.get<number>("repositoryContext.maxCharacters", defaultRepositoryContextLimits.maxCharacters),
+      timeoutMs: configuration.get<number>("repositoryContext.timeoutMs", defaultRepositoryContextLimits.timeoutMs),
     });
   }
 

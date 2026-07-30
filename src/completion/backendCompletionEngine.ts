@@ -52,7 +52,7 @@ export class BackendCompletionEngine implements CompletionEngine {
 }
 
 export function toApiCompletionRequest(request: CompletionRequest, version: string): ApiCompletionRequest {
-  return {
+  const apiRequest: ApiCompletionRequest = {
     context: {
       prefix: request.prefix,
       suffix: request.suffix,
@@ -62,4 +62,11 @@ export function toApiCompletionRequest(request: CompletionRequest, version: stri
     },
     client: { name: "deinscomplete-vscode", version },
   };
+  if (request.repositoryContext !== undefined) {
+    apiRequest.repositoryContext = {
+      files: request.repositoryContext.files,
+      symbols: request.repositoryContext.symbols,
+    };
+  }
+  return apiRequest;
 }

@@ -1,15 +1,18 @@
 import * as vscode from "vscode";
 import { ContextBuilder } from "../context/contextBuilder";
+import { RepositoryContextBuilder } from "../context/repository/repositoryContextBuilder";
 import { DeinsCompleteLifecycle } from "../core/lifecycle";
 import { Logger } from "../logging/logger";
 import { bridgeCancellation } from "../utils/cancellation";
 import { RequestManager } from "./requestManager";
+import { CompletionRequest } from "./completionTypes";
 import { EditorStateSnapshot, isCurrentEditorState } from "./editorState";
 
 export class DeinsCompleteInlineCompletionProvider implements vscode.InlineCompletionItemProvider {
   constructor(
     private readonly lifecycle: DeinsCompleteLifecycle,
     private readonly contextBuilder: ContextBuilder,
+    private readonly repositoryContextBuilder: RepositoryContextBuilder,
     private readonly requests: RequestManager,
     private readonly logger: Logger,
   ) {}
@@ -25,8 +28,9 @@ export class DeinsCompleteInlineCompletionProvider implements vscode.InlineCompl
     }
 
     const snapshot = this.getEditorState(document);
-    const request = this.contextBuilder.build(document, position);
+    const request: CompletionRequest = this.contextBuilder.build(document, position);
     const cancellation = bridgeCancellation(token);
+    request.repositoryContext = await this.repositoryContextBuilder.build(document, request, cancellation.signal);
     this.logger.debug(`Inline completion requested (language=${request.language}, version=${snapshot.version}, prefixChars=${request.metadata.prefixCharacters}, suffixChars=${request.metadata.suffixCharacters})`);
 
     try {

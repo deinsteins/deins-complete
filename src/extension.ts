@@ -2,6 +2,7 @@ import * as vscode from "vscode";
 import { registerCommands } from "./commands/registerCommands";
 import { DeinsCompleteClient } from "./api/deinsCompleteClient";
 import { ContextBuilder } from "./context/contextBuilder";
+import { RepositoryContextBuilder } from "./context/repository/repositoryContextBuilder";
 import { DeinsCompleteInlineCompletionProvider } from "./completion/inlineCompletionProvider";
 import { BackendCompletionEngine } from "./completion/backendCompletionEngine";
 import { RequestManager } from "./completion/requestManager";
@@ -39,7 +40,8 @@ export function activate(context: vscode.ExtensionContext): void {
       if (!quotaNotified) { quotaNotified = true; void vscode.window.showWarningMessage("DeinsComplete daily completion limit reached."); }
     });
     const requests = new RequestManager(engine, config);
-    const completionProvider = new DeinsCompleteInlineCompletionProvider(lifecycle, new ContextBuilder(config, undefined, getSafeFilePath), requests, logger);
+    const repositoryContext = new RepositoryContextBuilder(config);
+    const completionProvider = new DeinsCompleteInlineCompletionProvider(lifecycle, new ContextBuilder(config, undefined, getSafeFilePath), repositoryContext, requests, logger);
     statusBar.update(lifecycle.getState());
 
     context.subscriptions.push(
@@ -47,8 +49,10 @@ export function activate(context: vscode.ExtensionContext): void {
       { dispose: () => requests.dispose() },
       lifecycle.start(),
       lifecycle.onDidChangeState((state) => statusBar.update(state)),
+      vscode.workspace.onDidChangeTextDocument((event) => repositoryContext.invalidate(event.document.uri)),
+      vscode.window.onDidChangeActiveTextEditor((editor) => { if (editor !== undefined) repositoryContext.record(editor.document); }),
       vscode.languages.registerInlineCompletionItemProvider({ scheme: "file" }, completionProvider),
-      ...registerCommands(config, lifecycle, logger, backendClient, requests, installation),
+      ...registerCommands(config, lifecycle, logger, backendClient, requests, installation, repositoryContext),
     );
     logger.info("DeinsComplete activated.");
   } catch (error) {

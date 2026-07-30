@@ -13,9 +13,29 @@ type Client struct {
 	Version string `json:"version"`
 }
 
+type RepositoryContextFile struct {
+	Path     string `json:"path"`
+	Language string `json:"language"`
+	Content  string `json:"content"`
+	Reason   string `json:"reason"`
+}
+
+type RepositorySymbol struct {
+	Name      string `json:"name"`
+	Kind      string `json:"kind"`
+	FilePath  string `json:"filePath"`
+	Signature string `json:"signature,omitempty"`
+}
+
+type RepositoryContext struct {
+	Files   []RepositoryContextFile `json:"files"`
+	Symbols []RepositorySymbol      `json:"symbols,omitempty"`
+}
+
 type Request struct {
-	Context Context `json:"context"`
-	Client  *Client `json:"client,omitempty"`
+	Context           Context            `json:"context"`
+	RepositoryContext *RepositoryContext `json:"repositoryContext,omitempty"`
+	Client            *Client            `json:"client,omitempty"`
 }
 
 type Result struct {

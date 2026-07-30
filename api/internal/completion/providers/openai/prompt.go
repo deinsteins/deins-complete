@@ -11,6 +11,17 @@ const systemInstruction = `Complete code at the cursor. Return only inserted cod
 func BuildMessages(request completion.Request) []Message {
 	return []Message{
 		{Role: "system", Content: systemInstruction},
-		{Role: "user", Content: fmt.Sprintf("Language: %s\n\n<PREFIX>\n%s\n</PREFIX>\n\n<SUFFIX>\n%s\n</SUFFIX>\n\nReturn only the code inserted between PREFIX and SUFFIX.", request.Context.Language, request.Context.Prefix, request.Context.Suffix)},
+		{Role: "user", Content: fmt.Sprintf("Language: %s\n\n<PREFIX>\n%s\n</PREFIX>\n\n<SUFFIX>\n%s\n</SUFFIX>%s\n\nReturn only the code inserted between PREFIX and SUFFIX.", request.Context.Language, request.Context.Prefix, request.Context.Suffix, repositoryPrompt(request))},
 	}
+}
+
+func repositoryPrompt(request completion.Request) string {
+	if request.RepositoryContext == nil || len(request.RepositoryContext.Files) == 0 {
+		return ""
+	}
+	text := "\n\n<REPOSITORY_CONTEXT>"
+	for _, file := range request.RepositoryContext.Files {
+		text += fmt.Sprintf("\n<FILE path=%q language=%q reason=%q>\n%s\n</FILE>", file.Path, file.Language, file.Reason, file.Content)
+	}
+	return text + "\n</REPOSITORY_CONTEXT>"
 }

@@ -75,6 +75,33 @@
           "maximum": 10000,
           "description": "Maximum number of characters collected after the cursor for inline completion context."
         },
+        "deinscomplete.repositoryContext.enabled": {
+          "type": "boolean",
+          "default": true,
+          "scope": "window",
+          "description": "Include small, relevant workspace-file context with completion requests."
+        },
+        "deinscomplete.repositoryContext.maxFiles": {
+          "type": "number",
+          "default": 4,
+          "minimum": 1,
+          "maximum": 8,
+          "description": "Maximum number of related workspace files included in a completion request."
+        },
+        "deinscomplete.repositoryContext.maxCharacters": {
+          "type": "number",
+          "default": 12000,
+          "minimum": 1000,
+          "maximum": 30000,
+          "description": "Maximum total characters from related workspace files included in a completion request."
+        },
+        "deinscomplete.repositoryContext.timeoutMs": {
+          "type": "number",
+          "default": 40,
+          "minimum": 10,
+          "maximum": 100,
+          "description": "Time budget for collecting related workspace context."
+        },
         "deinscomplete.backend.url": {
           "type": "string",
           "default": "https://api.deinscomplete.web.id",
