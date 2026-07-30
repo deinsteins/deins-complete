@@ -13,6 +13,7 @@ import (
 
 	"deinscomplete/api/internal/completion"
 	"deinscomplete/api/internal/completion/providers"
+	"deinscomplete/api/internal/completion/sanitizer"
 	"deinscomplete/api/internal/config"
 	"deinscomplete/api/internal/logging"
 	"deinscomplete/api/internal/server"
@@ -35,7 +36,7 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	service := completion.NewService(provider)
+	service := completion.NewService(provider, sanitizer.New(sanitizer.Config{MaxLines: configuration.AI.MaxCompletionLines, MaxChars: configuration.AI.MaxCompletionChars}))
 	server := server.New(configuration, logger, service)
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()

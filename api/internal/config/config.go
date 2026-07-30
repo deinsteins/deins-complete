@@ -10,12 +10,14 @@ import (
 )
 
 type AIConfig struct {
-	Provider    string
-	Timeout     time.Duration
-	MaxTokens   int
-	Temperature float64
-	OpenAI      OpenAIConfig
-	Anthropic   AnthropicConfig
+	Provider           string
+	Timeout            time.Duration
+	MaxTokens          int
+	Temperature        float64
+	MaxCompletionLines int
+	MaxCompletionChars int
+	OpenAI             OpenAIConfig
+	Anthropic          AnthropicConfig
 }
 
 type OpenAIConfig struct{ BaseURL, APIKey, Model string }
@@ -40,12 +42,13 @@ func parse(lookup func(string) string) (Config, error) {
 		LogLevel:    valueOrDefault(lookup("LOG_LEVEL"), "info"),
 		Port:        3001,
 		AI: AIConfig{
-			Provider:    valueOrDefault(lookup("AI_PROVIDER"), "mock"),
-			OpenAI:      OpenAIConfig{BaseURL: lookup("AI_BASE_URL"), APIKey: lookup("AI_API_KEY"), Model: lookup("AI_MODEL")},
-			Anthropic:   AnthropicConfig{BaseURL: lookup("ANTHROPIC_BASE_URL"), APIKey: lookup("ANTHROPIC_API_KEY"), Model: lookup("ANTHROPIC_MODEL"), Version: lookup("ANTHROPIC_VERSION")},
-			Timeout:     10 * time.Second,
-			MaxTokens:   128,
-			Temperature: 0.1,
+			Provider:           valueOrDefault(lookup("AI_PROVIDER"), "mock"),
+			OpenAI:             OpenAIConfig{BaseURL: lookup("AI_BASE_URL"), APIKey: lookup("AI_API_KEY"), Model: lookup("AI_MODEL")},
+			Anthropic:          AnthropicConfig{BaseURL: lookup("ANTHROPIC_BASE_URL"), APIKey: lookup("ANTHROPIC_API_KEY"), Model: lookup("ANTHROPIC_MODEL"), Version: lookup("ANTHROPIC_VERSION")},
+			Timeout:            10 * time.Second,
+			MaxTokens:          128,
+			Temperature:        0.1,
+			MaxCompletionLines: 20, MaxCompletionChars: 8000,
 		},
 	}
 
@@ -92,6 +95,20 @@ func parseAIConfig(config *AIConfig, environment string, lookup func(string) str
 			return fmt.Errorf("invalid AI_TEMPERATURE value: %s", raw)
 		}
 		config.Temperature = value
+	}
+	if raw := lookup("AI_MAX_COMPLETION_LINES"); raw != "" {
+		v, e := strconv.Atoi(raw)
+		if e != nil || v < 1 || v > 100 {
+			return fmt.Errorf("invalid AI_MAX_COMPLETION_LINES value: %s", raw)
+		}
+		config.MaxCompletionLines = v
+	}
+	if raw := lookup("AI_MAX_COMPLETION_CHARS"); raw != "" {
+		v, e := strconv.Atoi(raw)
+		if e != nil || v < 100 || v > 20000 {
+			return fmt.Errorf("invalid AI_MAX_COMPLETION_CHARS value: %s", raw)
+		}
+		config.MaxCompletionChars = v
 	}
 	switch config.Provider {
 	case "mock":

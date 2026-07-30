@@ -41,3 +41,5 @@ ANTHROPIC_VERSION=2023-06-01
 ```
 
 These are backend-operator settings only. VS Code users do not configure an upstream provider, model, base URL, or API key. The backend sends only bounded `language`, `prefix`, and `suffix` context to the configured provider.
+
+Provider output is sanitized before it reaches ghost text: obvious Markdown fences, common explanation labels, surrounding-code overlap, excessive blank lines, and oversized completions are removed conservatively.
