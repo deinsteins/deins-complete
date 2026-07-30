@@ -19,5 +19,9 @@ type Request struct {
 }
 
 type Result struct {
-	Text string
+	Text             string
+	FinishReason     string
+	PromptTokens     int
+	CompletionTokens int
+	TotalTokens      int
 }

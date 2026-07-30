@@ -53,6 +53,10 @@ func (handler *CompletionHandler) ServeHTTP(writer http.ResponseWriter, request 
 		if request.Context().Err() != nil {
 			return
 		}
+		if providerError, ok := completion.AsProviderError(err); ok {
+			writeProviderError(writer, providerError.Kind, requestID)
+			return
+		}
 		handler.logger.Error("completion failed", "request_id", requestID, "error", err)
 		response.WriteError(writer, http.StatusInternalServerError, "INTERNAL_ERROR", "Completion failed.", requestID)
 		return
@@ -61,6 +65,17 @@ func (handler *CompletionHandler) ServeHTTP(writer http.ResponseWriter, request 
 		"completion": map[string]string{"text": result.Text},
 		"metadata":   map[string]string{"requestId": requestID},
 	})
+}
+
+func writeProviderError(writer http.ResponseWriter, kind completion.ProviderErrorKind, requestID string) {
+	switch kind {
+	case completion.ProviderTimeout:
+		response.WriteError(writer, http.StatusGatewayTimeout, "PROVIDER_TIMEOUT", "Completion provider timed out.", requestID)
+	case completion.ProviderRateLimit:
+		response.WriteError(writer, http.StatusServiceUnavailable, "PROVIDER_RATE_LIMITED", "Completion provider is unavailable.", requestID)
+	default:
+		response.WriteError(writer, http.StatusBadGateway, "PROVIDER_UNAVAILABLE", "Completion provider is unavailable.", requestID)
+	}
 }
 
 func ensureSingleJSONValue(decoder *json.Decoder) error {

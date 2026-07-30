@@ -31,7 +31,11 @@ func run() error {
 		return err
 	}
 	logger := logging.New(configuration.LogLevel)
-	service := completion.NewService(providers.MockProvider{})
+	provider, err := providers.NewProvider(configuration.AI, logger)
+	if err != nil {
+		return err
+	}
+	service := completion.NewService(provider)
 	server := server.New(configuration, logger, service)
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()

@@ -34,6 +34,9 @@ paths:
         '405': { $ref: '#/components/responses/MethodNotAllowed' }
         '413': { $ref: '#/components/responses/InvalidRequest' }
         '500': { $ref: '#/components/responses/InternalError' }
+        '502': { $ref: '#/components/responses/ProviderUnavailable' }
+        '503': { $ref: '#/components/responses/ProviderUnavailable' }
+        '504': { $ref: '#/components/responses/ProviderTimeout' }
 components:
   schemas:
     CompletionContext:
@@ -92,4 +95,10 @@ components:
       content: { application/json: { schema: { $ref: '#/components/schemas/ApiErrorResponse' } } }
     InternalError:
       description: Internal error
+      content: { application/json: { schema: { $ref: '#/components/schemas/ApiErrorResponse' } } }
+    ProviderUnavailable:
+      description: Completion provider is unavailable
+      content: { application/json: { schema: { $ref: '#/components/schemas/ApiErrorResponse' } } }
+    ProviderTimeout:
+      description: Completion provider timed out
       content: { application/json: { schema: { $ref: '#/components/schemas/ApiErrorResponse' } } }

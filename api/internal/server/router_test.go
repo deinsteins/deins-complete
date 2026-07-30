@@ -2,6 +2,7 @@ package server
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"io"
 	"log/slog"
@@ -13,6 +14,12 @@ import (
 	"deinscomplete/api/internal/completion"
 	"deinscomplete/api/internal/completion/providers"
 )
+
+type providerErrorProvider struct{}
+
+func (providerErrorProvider) Complete(context.Context, completion.Request) (completion.Result, error) {
+	return completion.Result{}, completion.NewProviderError(completion.ProviderTimeout, context.DeadlineExceeded)
+}
 
 func testRouter() http.Handler {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
@@ -84,6 +91,17 @@ func TestMethodNotAllowedReturnsJSON(t *testing.T) {
 	response := httptest.NewRecorder()
 	testRouter().ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/v1/completions", nil))
 	if response.Code != http.StatusMethodNotAllowed || !strings.Contains(response.Body.String(), `"METHOD_NOT_ALLOWED"`) {
+		t.Fatalf("unexpected response: %d %s", response.Code, response.Body.String())
+	}
+}
+
+func TestProviderErrorsUseSafeAPIResponses(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	router := newRouter(logger, completion.NewService(providerErrorProvider{}))
+	body := `{"context":{"prefix":"const user =","suffix":"","language":"typescript","filePath":"test.ts","cursorOffset":12}}`
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/v1/completions", strings.NewReader(body)))
+	if response.Code != http.StatusGatewayTimeout || !strings.Contains(response.Body.String(), `"PROVIDER_TIMEOUT"`) {
 		t.Fatalf("unexpected response: %d %s", response.Code, response.Body.String())
 	}
 }
