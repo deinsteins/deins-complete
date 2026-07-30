@@ -7,19 +7,47 @@
   "engines": {
     "vscode": "^1.85.0"
   },
-  "categories": ["Other"],
-  "activationEvents": ["onStartupFinished"],
-  "main": "./out/extension.js",
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./out/src/extension.js",
   "contributes": {
     "commands": [
-      { "command": "deinscomplete.enable", "title": "DeinsComplete: Enable" },
-      { "command": "deinscomplete.disable", "title": "DeinsComplete: Disable" },
-      { "command": "deinscomplete.showLogs", "title": "DeinsComplete: Show Logs" },
-      { "command": "deinscomplete.diagnostics", "title": "DeinsComplete: Diagnostics" },
-      { "command": "deinscomplete.checkBackend", "title": "DeinsComplete: Check Backend" },
-      { "command": "deinscomplete.resetAuthentication", "title": "DeinsComplete: Reset Authentication" }
-      ,{ "command": "deinscomplete.clearCompletionCache", "title": "DeinsComplete: Clear Completion Cache" }
-      ,{ "command": "deinscomplete.showCompletionStats", "title": "DeinsComplete: Show Completion Stats" }
+      {
+        "command": "deinscomplete.enable",
+        "title": "DeinsComplete: Enable"
+      },
+      {
+        "command": "deinscomplete.disable",
+        "title": "DeinsComplete: Disable"
+      },
+      {
+        "command": "deinscomplete.showLogs",
+        "title": "DeinsComplete: Show Logs"
+      },
+      {
+        "command": "deinscomplete.diagnostics",
+        "title": "DeinsComplete: Diagnostics"
+      },
+      {
+        "command": "deinscomplete.checkBackend",
+        "title": "DeinsComplete: Check Backend"
+      },
+      {
+        "command": "deinscomplete.resetAuthentication",
+        "title": "DeinsComplete: Reset Authentication"
+      },
+      {
+        "command": "deinscomplete.clearCompletionCache",
+        "title": "DeinsComplete: Clear Completion Cache"
+      },
+      {
+        "command": "deinscomplete.showCompletionStats",
+        "title": "DeinsComplete: Show Completion Stats"
+      }
     ],
     "configuration": {
       "title": "DeinsComplete",
@@ -55,23 +83,47 @@
           "maximum": 30000,
           "description": "Maximum time to wait for a DeinsComplete backend completion request."
         },
-        "deinscomplete.completion.debounceMs": { "type": "number", "default": 150, "minimum": 0, "maximum": 2000, "description": "Delay before requesting an inline completion." },
-        "deinscomplete.cache.enabled": { "type": "boolean", "default": true, "description": "Cache recent inline completions in memory." },
-        "deinscomplete.cache.ttlMs": { "type": "number", "default": 60000, "minimum": 1000, "maximum": 300000, "description": "Completion cache lifetime in milliseconds." },
-        "deinscomplete.cache.maxEntries": { "type": "number", "default": 100, "minimum": 10, "maximum": 1000, "description": "Maximum in-memory completion cache entries." }
+        "deinscomplete.completion.debounceMs": {
+          "type": "number",
+          "default": 150,
+          "minimum": 0,
+          "maximum": 2000,
+          "description": "Delay before requesting an inline completion."
+        },
+        "deinscomplete.cache.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Cache recent inline completions in memory."
+        },
+        "deinscomplete.cache.ttlMs": {
+          "type": "number",
+          "default": 60000,
+          "minimum": 1000,
+          "maximum": 300000,
+          "description": "Completion cache lifetime in milliseconds."
+        },
+        "deinscomplete.cache.maxEntries": {
+          "type": "number",
+          "default": 100,
+          "minimum": 10,
+          "maximum": 1000,
+          "description": "Maximum in-memory completion cache entries."
+        }
       }
     }
   },
   "scripts": {
     "compile": "tsc -p .",
     "lint": "eslint src test --ext .ts",
-    "test": "npm run compile && node --test out/test/**/*.test.js"
+    "test": "npm run compile && node --test out/test/**/*.test.js",
+    "package": "vsce package --allow-missing-repository"
   },
   "devDependencies": {
     "@types/node": "^20.12.0",
     "@types/vscode": "^1.85.0",
     "@typescript-eslint/eslint-plugin": "^7.7.0",
     "@typescript-eslint/parser": "^7.7.0",
+    "@vscode/vsce": "^2.26.1",
     "eslint": "^8.57.0",
     "typescript": "^5.4.0"
   }

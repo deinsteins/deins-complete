@@ -20,6 +20,9 @@ import (
 	"deinscomplete/api/internal/server"
 )
 
+var Version = "dev"
+var Commit = "unknown"
+
 func main() {
 	if err := run(); err != nil {
 		slog.Error("server failed", "error", err)
