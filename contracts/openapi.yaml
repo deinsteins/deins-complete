@@ -137,6 +137,10 @@ components:
           maxItems: 24
           description: Bounded package names relevant to the active file; package versions and lockfiles are not sent.
           items: { type: string, maxLength: 200 }
+        focus:
+          type: string
+          enum: [component-props, member-access, function-arguments, tailwind-class, object-fields, general]
+          description: Server-side completion-position classification.
     Client:
       type: object
       properties:

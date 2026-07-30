@@ -44,6 +44,9 @@ func Validate(request Request) error {
 				return ErrInvalidRequest
 			}
 		}
+		if repository.Focus != "" && repository.Focus != "component-props" && repository.Focus != "member-access" && repository.Focus != "function-arguments" && repository.Focus != "tailwind-class" && repository.Focus != "object-fields" && repository.Focus != "general" {
+			return ErrInvalidRequest
+		}
 		for _, dependency := range repository.Dependencies {
 			if dependency == "" || len(dependency) > 200 {
 				return ErrInvalidRequest

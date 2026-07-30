@@ -5,6 +5,7 @@ import { CompletionContext, RepositoryContext, RepositoryContextFile, Repository
 import { RepositoryContextSettings } from "./repositoryContextConfig";
 import { relevantDependencies } from "./dependencyContext";
 import { tsconfigAliasTargets } from "./projectConfig";
+import { CompletionFocus, completionFocus } from "../../completion/contextComplexity";
 
 const maxFileBytes = 1024 * 1024;
 const perFileCharacters = 3000;
@@ -88,7 +89,8 @@ export class RepositoryContextBuilder {
       characters += content.length;
       symbols.push(...extractSymbols(text, filePath, candidate.names));
     }
-    if (!expired()) symbols.push(...await this.librarySymbols(document, current, deadline));
+    const focus = completionFocus(current);
+    if (!expired()) symbols.push(...await this.librarySymbols(document, current, focus, deadline));
     if (signal.aborted) return undefined;
     const boundedSymbols = dedupeSymbols(symbols).slice(0, 20);
     const fingerprint = createHash("sha256").update(files.map((file) => `${file.path}\0${file.content}`).join("\0")).update("\0").update(dependencies.join("\0")).update("\0").update(boundedSymbols.map((symbol) => `${symbol.filePath}\0${symbol.name}\0${symbol.signature ?? ""}`).join("\0")).digest("hex");
@@ -102,7 +104,7 @@ export class RepositoryContextBuilder {
     this.stats.lastDurationMs = durationMs;
     if (timedOut) this.stats.timedOut++;
     if (timedOut || files.length < candidates.size) this.stats.partial++;
-    return { files, symbols: boundedSymbols, dependencies, fingerprint, durationMs, timedOut };
+    return { files, symbols: boundedSymbols, dependencies, focus, fingerprint, durationMs, timedOut };
   }
 
   private async readDependencies(document: vscode.TextDocument): Promise<string[]> {
@@ -155,14 +157,24 @@ export class RepositoryContextBuilder {
     return undefined;
   }
 
-  private async librarySymbols(document: vscode.TextDocument, current: CompletionContext, deadline: number): Promise<RepositorySymbol[]> {
+  private async librarySymbols(document: vscode.TextDocument, current: CompletionContext, focus: CompletionFocus, deadline: number): Promise<RepositorySymbol[]> {
     const names = new Set(identifiersNearCursor(current));
     const imports = extractExternalImports(document.getText()).filter((reference) => reference.names.some((name) => names.has(name))).slice(0, 3);
     const remaining = Math.min(20, Math.max(0, deadline - performance.now()));
     if (imports.length === 0 || remaining === 0) return [];
-    const hover = await beforeDeadline(vscode.commands.executeCommand<vscode.Hover[]>("vscode.executeHoverProvider", document.uri, document.positionAt(current.cursorOffset)), remaining);
+    const source = `package:${imports[0].specifier}`;
+    const members = focus === "component-props" || focus === "member-access"
+      ? await this.providerMembers(document, current, source, Math.min(remaining, 12)) : [];
+    const hoverRemaining = Math.min(20, Math.max(0, deadline - performance.now()));
+    if (hoverRemaining === 0) return members;
+    const hover = await beforeDeadline(vscode.commands.executeCommand<vscode.Hover[]>("vscode.executeHoverProvider", document.uri, document.positionAt(current.cursorOffset)), hoverRemaining);
     const signature = hover === undefined ? "" : hover.map((item) => item.contents.map(hoverContent).join("\n")).join("\n").replace(/\s+/g, " ").slice(0, 500);
-    return imports.flatMap((reference) => reference.names.filter((name) => names.has(name)).map((name) => ({ name, kind: "library-symbol", filePath: `package:${reference.specifier}`, signature: `${name} from ${reference.specifier}${signature === "" ? "" : ` — ${signature}`}` })));
+    return [...members, ...imports.flatMap((reference) => reference.names.filter((name) => names.has(name)).map((name) => ({ name, kind: "library-symbol", filePath: `package:${reference.specifier}`, signature: `${name} from ${reference.specifier}${signature === "" ? "" : ` — ${signature}`}` })))];
+  }
+
+  private async providerMembers(document: vscode.TextDocument, current: CompletionContext, source: string, milliseconds: number): Promise<RepositorySymbol[]> {
+    const result = await beforeDeadline(vscode.commands.executeCommand<vscode.CompletionList>("vscode.executeCompletionItemProvider", document.uri, document.positionAt(current.cursorOffset)), milliseconds);
+    return (result?.items ?? []).slice(0, 12).map((item) => ({ name: completionLabel(item), kind: completionKind(item.kind), filePath: source, signature: typeof item.detail === "string" ? item.detail.slice(0, 300) : undefined }));
   }
 
   private async readText(uri: vscode.Uri): Promise<string | undefined> {
@@ -238,6 +250,8 @@ function languageFor(uri: vscode.Uri): string { return path.posix.extname(uri.pa
 function containsSensitiveContent(text: string): boolean { return /-----BEGIN (?:[A-Z ]+ )?PRIVATE KEY-----|(?:API_KEY|SECRET|PASSWORD)\s*=/i.test(text); }
 function escapeRegExp(value: string): string { return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); }
 function hoverContent(value: vscode.MarkedString | vscode.MarkdownString): string { return typeof value === "string" ? value : "language" in value ? `${value.language} ${value.value}` : value.value; }
+function completionLabel(item: vscode.CompletionItem): string { return typeof item.label === "string" ? item.label : item.label.label; }
+function completionKind(kind: vscode.CompletionItemKind | undefined): string { return kind === vscode.CompletionItemKind.Method ? "method" : kind === vscode.CompletionItemKind.Property || kind === vscode.CompletionItemKind.Field ? "property" : "member"; }
 async function beforeDeadline<T>(action: Thenable<T>, milliseconds: number): Promise<T | undefined> {
   let timer: ReturnType<typeof setTimeout> | undefined;
   try { return await Promise.race([Promise.resolve(action).catch(() => undefined), new Promise<undefined>((resolve) => { timer = setTimeout(() => resolve(undefined), milliseconds); })]); } finally { if (timer !== undefined) clearTimeout(timer); }

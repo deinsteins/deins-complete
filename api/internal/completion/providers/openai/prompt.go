@@ -16,10 +16,13 @@ func BuildMessages(request completion.Request) []Message {
 }
 
 func repositoryPrompt(request completion.Request) string {
-	if request.RepositoryContext == nil || (len(request.RepositoryContext.Files) == 0 && len(request.RepositoryContext.Dependencies) == 0) {
+	if request.RepositoryContext == nil || (len(request.RepositoryContext.Files) == 0 && len(request.RepositoryContext.Dependencies) == 0 && len(request.RepositoryContext.Symbols) == 0 && request.RepositoryContext.Focus == "") {
 		return ""
 	}
 	text := "\n\n<REPOSITORY_CONTEXT>"
+	if request.RepositoryContext.Focus != "" {
+		text += fmt.Sprintf("\n<COMPLETION_FOCUS>%s</COMPLETION_FOCUS>", request.RepositoryContext.Focus)
+	}
 	if len(request.RepositoryContext.Dependencies) > 0 {
 		text += fmt.Sprintf("\n<DEPENDENCIES>%v</DEPENDENCIES>", request.RepositoryContext.Dependencies)
 	}

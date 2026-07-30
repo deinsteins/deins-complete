@@ -11,6 +11,7 @@ export interface ApiCompletionRequest {
     files: Array<{ path: string; language: string; content: string; reason: string }>;
     symbols?: Array<{ name: string; kind: string; filePath: string; signature?: string }>;
     dependencies?: string[];
+    focus?: string;
   };
   client: {
     name: "deinscomplete-vscode";

@@ -102,8 +102,11 @@ const systemPrompt = "You are a code completion engine. Return only code inserte
 
 func userPrompt(r completion.Request) string {
 	prompt := "Language: " + r.Context.Language + "\n\n<PREFIX>\n" + r.Context.Prefix + "\n</PREFIX>\n\n<SUFFIX>\n" + r.Context.Suffix + "\n</SUFFIX>"
-	if r.RepositoryContext != nil && (len(r.RepositoryContext.Files) > 0 || len(r.RepositoryContext.Dependencies) > 0) {
+	if r.RepositoryContext != nil && (len(r.RepositoryContext.Files) > 0 || len(r.RepositoryContext.Dependencies) > 0 || len(r.RepositoryContext.Symbols) > 0 || r.RepositoryContext.Focus != "") {
 		prompt += "\n\n<REPOSITORY_CONTEXT>"
+		if r.RepositoryContext.Focus != "" {
+			prompt += "\n<COMPLETION_FOCUS>" + r.RepositoryContext.Focus + "</COMPLETION_FOCUS>"
+		}
 		if len(r.RepositoryContext.Dependencies) > 0 {
 			prompt += "\n<DEPENDENCIES>" + strings.Join(r.RepositoryContext.Dependencies, ", ") + "</DEPENDENCIES>"
 		}
