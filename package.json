@@ -16,6 +16,8 @@
       { "command": "deinscomplete.disable", "title": "DeinsComplete: Disable" },
       { "command": "deinscomplete.showLogs", "title": "DeinsComplete: Show Logs" },
       { "command": "deinscomplete.checkBackend", "title": "DeinsComplete: Check Backend" }
+      ,{ "command": "deinscomplete.clearCompletionCache", "title": "DeinsComplete: Clear Completion Cache" }
+      ,{ "command": "deinscomplete.showCompletionStats", "title": "DeinsComplete: Show Completion Stats" }
     ],
     "configuration": {
       "title": "DeinsComplete",

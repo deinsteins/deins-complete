@@ -1,0 +1,8 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import { RequestManager } from "../src/completion/requestManager";
+import { CompletionRequest } from "../src/completion/completionTypes";
+const req=(prefix="x"):CompletionRequest=>({language:"ts",filePath:"x",safeFilePath:"x",prefix,suffix:"",cursorOffset:0,documentVersion:1,currentLine:"",textBeforeCursorOnLine:"",textAfterCursorOnLine:"",indentation:"",metadata:{totalDocumentCharacters:0,prefixCharacters:0,suffixCharacters:0,truncatedPrefix:false,truncatedSuffix:false,estimatedPrefixTokens:0,estimatedSuffixTokens:0,estimatedTotalTokens:0,buildDurationMilliseconds:0}});
+const settings={debounceMs:()=>0,cacheEnabled:()=>true,cacheTtlMs:()=>60000,cacheMaxEntries:()=>2};
+test("cache and in-flight deduplication avoid duplicate engine calls",async()=>{let calls=0;const manager=new RequestManager({complete:async()=>{calls++;return{text:"ok"}}},settings);const signal=new AbortController().signal;await Promise.all([manager.complete("a",req(),signal),manager.complete("a",req(),signal)]);await manager.complete("a",req(),signal);assert.equal(calls,1);assert.equal(manager.getStats().cacheHits,1)});
+test("different documents can complete independently",async()=>{let calls=0;const manager=new RequestManager({complete:async()=>{calls++;return{text:"ok"}}},settings);const s=new AbortController().signal;await Promise.all([manager.complete("a",req("a"),s),manager.complete("b",req("b"),s)]);assert.equal(calls,2)});

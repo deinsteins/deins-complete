@@ -31,7 +31,7 @@ export function activate(context: vscode.ExtensionContext): void {
       lifecycle.start(),
       lifecycle.onDidChangeState((state) => statusBar.update(state)),
       vscode.languages.registerInlineCompletionItemProvider({ scheme: "file" }, completionProvider),
-      ...registerCommands(config, lifecycle, logger, backendClient),
+      ...registerCommands(config, lifecycle, logger, backendClient, requests),
     );
     logger.info("DeinsComplete activated.");
   } catch (error) {
