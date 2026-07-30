@@ -1,9 +1,6 @@
-export interface CompletionRequest {
-  language: string;
-  filePath: string;
-  prefix: string;
-  suffix: string;
-}
+import { CompletionContext } from "../context/contextTypes";
+
+export interface CompletionRequest extends CompletionContext {}
 
 export interface CompletionResult {
   text: string;

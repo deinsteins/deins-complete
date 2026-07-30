@@ -1,14 +1,15 @@
 import * as vscode from "vscode";
+import { ContextBuilder } from "../context/contextBuilder";
 import { DeinsCompleteLifecycle } from "../core/lifecycle";
 import { Logger } from "../logging/logger";
 import { bridgeCancellation } from "../utils/cancellation";
 import { CompletionEngine } from "./completionEngine";
-import { CompletionRequest } from "./completionTypes";
 import { EditorStateSnapshot, isCurrentEditorState } from "./editorState";
 
 export class DeinsCompleteInlineCompletionProvider implements vscode.InlineCompletionItemProvider {
   constructor(
     private readonly lifecycle: DeinsCompleteLifecycle,
+    private readonly contextBuilder: ContextBuilder,
     private readonly engine: CompletionEngine,
     private readonly logger: Logger,
   ) {}
@@ -24,9 +25,9 @@ export class DeinsCompleteInlineCompletionProvider implements vscode.InlineCompl
     }
 
     const snapshot = this.getEditorState(document);
-    const request = this.createRequest(document, position);
+    const request = this.contextBuilder.build(document, position);
     const cancellation = bridgeCancellation(token);
-    this.logger.debug(`Inline completion requested (language=${request.language}, version=${snapshot.version})`);
+    this.logger.debug(`Inline completion requested (language=${request.language}, version=${snapshot.version}, prefixChars=${request.metadata.prefixCharacters}, suffixChars=${request.metadata.suffixCharacters})`);
 
     try {
       const result = await this.engine.complete(request, cancellation.signal);
@@ -50,17 +51,6 @@ export class DeinsCompleteInlineCompletionProvider implements vscode.InlineCompl
     } finally {
       cancellation.dispose();
     }
-  }
-
-  private createRequest(document: vscode.TextDocument, position: vscode.Position): CompletionRequest {
-    const start = new vscode.Position(0, 0);
-    const end = document.lineAt(document.lineCount - 1).range.end;
-    return {
-      language: document.languageId,
-      filePath: document.uri.fsPath,
-      prefix: document.getText(new vscode.Range(start, position)),
-      suffix: document.getText(new vscode.Range(position, end)),
-    };
   }
 
   private getEditorState(document: vscode.TextDocument): EditorStateSnapshot {

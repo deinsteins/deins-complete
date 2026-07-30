@@ -1,5 +1,6 @@
 import * as vscode from "vscode";
 import { registerCommands } from "./commands/registerCommands";
+import { ContextBuilder } from "./context/contextBuilder";
 import { DeinsCompleteInlineCompletionProvider } from "./completion/inlineCompletionProvider";
 import { MockCompletionEngine } from "./completion/mockCompletionEngine";
 import { ConfigService } from "./config/configService";
@@ -15,7 +16,7 @@ export function activate(context: vscode.ExtensionContext): void {
     const config = new ConfigService();
     const lifecycle = new DeinsCompleteLifecycle(config);
     const statusBar = new DeinsCompleteStatusBar();
-    const completionProvider = new DeinsCompleteInlineCompletionProvider(lifecycle, new MockCompletionEngine(), logger);
+    const completionProvider = new DeinsCompleteInlineCompletionProvider(lifecycle, new ContextBuilder(config), new MockCompletionEngine(), logger);
     statusBar.update(lifecycle.getState());
 
     context.subscriptions.push(
