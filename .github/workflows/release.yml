@@ -39,7 +39,8 @@ jobs:
       - run: cd api && go vet ./... && go test ./... && go test -race ./...
       - name: Create immutable release tag
         if: github.event_name == 'workflow_dispatch'
-        env: { TAG: ${{ steps.release.outputs.tag }} }
+        env:
+          TAG: "${{ steps.release.outputs.tag }}"
         run: |
           git fetch --tags
           ! git rev-parse -q --verify "refs/tags/$TAG"
