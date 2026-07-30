@@ -43,7 +43,7 @@ components:
         prefix: { type: string, maxLength: 50000 }
         suffix: { type: string, maxLength: 25000 }
         language: { type: string, minLength: 1, maxLength: 100 }
-        filePath: { type: string, maxLength: 4096 }
+        filePath: { type: string, maxLength: 4096, description: Workspace-relative path or filename only; never an absolute machine-local path. }
         cursorOffset: { type: integer, minimum: 0, description: Original document offset, not a context-relative offset. }
     Client:
       type: object

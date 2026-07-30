@@ -27,6 +27,7 @@ test("context builder preserves exact cursor boundaries in a small file", () => 
   assert.equal(context.prefix, "abc");
   assert.equal(context.suffix, "def");
   assert.equal(context.cursorOffset, 3);
+  assert.equal(context.safeFilePath, "/test.ts");
   assert.equal(context.currentLine, "abcdef");
 });
 

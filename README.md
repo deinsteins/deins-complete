@@ -11,3 +11,5 @@ cd api
 go run ./cmd/server
 go test ./...
 ```
+
+To test the extension against the mock backend, start the API above, launch an Extension Development Host, then type `const user =` in a file. The expected inline suggestion is `await getUser();`. The backend URL defaults to `http://127.0.0.1:3001` and may be overridden with `deinscomplete.backend.url`. No real AI provider is used yet.

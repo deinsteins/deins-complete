@@ -14,7 +14,8 @@
     "commands": [
       { "command": "deinscomplete.enable", "title": "DeinsComplete: Enable" },
       { "command": "deinscomplete.disable", "title": "DeinsComplete: Disable" },
-      { "command": "deinscomplete.showLogs", "title": "DeinsComplete: Show Logs" }
+      { "command": "deinscomplete.showLogs", "title": "DeinsComplete: Show Logs" },
+      { "command": "deinscomplete.checkBackend", "title": "DeinsComplete: Check Backend" }
     ],
     "configuration": {
       "title": "DeinsComplete",
@@ -37,6 +38,18 @@
           "minimum": 200,
           "maximum": 10000,
           "description": "Maximum number of characters collected after the cursor for inline completion context."
+        },
+        "deinscomplete.backend.url": {
+          "type": "string",
+          "default": "http://127.0.0.1:3001",
+          "description": "DeinsComplete backend service URL."
+        },
+        "deinscomplete.backend.timeoutMs": {
+          "type": "number",
+          "default": 5000,
+          "minimum": 500,
+          "maximum": 30000,
+          "description": "Maximum time to wait for a DeinsComplete backend completion request."
         }
       }
     }

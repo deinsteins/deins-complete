@@ -1,12 +1,14 @@
 import * as vscode from "vscode";
 import { registerCommands } from "./commands/registerCommands";
+import { DeinsCompleteClient } from "./api/deinsCompleteClient";
 import { ContextBuilder } from "./context/contextBuilder";
 import { DeinsCompleteInlineCompletionProvider } from "./completion/inlineCompletionProvider";
-import { MockCompletionEngine } from "./completion/mockCompletionEngine";
+import { BackendCompletionEngine } from "./completion/backendCompletionEngine";
 import { ConfigService } from "./config/configService";
 import { DeinsCompleteLifecycle } from "./core/lifecycle";
 import { Logger } from "./logging/logger";
 import { DeinsCompleteStatusBar } from "./status/statusBar";
+import { getSafeFilePath } from "./utils/safeFilePath";
 
 export function activate(context: vscode.ExtensionContext): void {
   const logger = new Logger();
@@ -16,7 +18,9 @@ export function activate(context: vscode.ExtensionContext): void {
     const config = new ConfigService();
     const lifecycle = new DeinsCompleteLifecycle(config);
     const statusBar = new DeinsCompleteStatusBar();
-    const completionProvider = new DeinsCompleteInlineCompletionProvider(lifecycle, new ContextBuilder(config), new MockCompletionEngine(), logger);
+    const backendClient = new DeinsCompleteClient(config, globalThis.fetch, logger);
+    const engine = new BackendCompletionEngine(backendClient, String(context.extension.packageJSON.version), logger);
+    const completionProvider = new DeinsCompleteInlineCompletionProvider(lifecycle, new ContextBuilder(config, undefined, getSafeFilePath), engine, logger);
     statusBar.update(lifecycle.getState());
 
     context.subscriptions.push(
@@ -24,7 +28,7 @@ export function activate(context: vscode.ExtensionContext): void {
       lifecycle.start(),
       lifecycle.onDidChangeState((state) => statusBar.update(state)),
       vscode.languages.registerInlineCompletionItemProvider({ scheme: "file" }, completionProvider),
-      ...registerCommands(config, lifecycle, logger),
+      ...registerCommands(config, lifecycle, logger, backendClient),
     );
     logger.info("DeinsComplete activated.");
   } catch (error) {

@@ -7,6 +7,7 @@ const engine = new MockCompletionEngine();
 const request = (prefix: string): CompletionRequest => ({
   language: "typescript",
   filePath: "/test.ts",
+  safeFilePath: "test.ts",
   prefix,
   suffix: "",
   cursorOffset: prefix.length,

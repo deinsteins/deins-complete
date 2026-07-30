@@ -8,6 +8,7 @@ export class ContextBuilder {
   constructor(
     private readonly limits: ContextLimitsProvider,
     private readonly tokenEstimator: TokenEstimator = new ApproximateTokenEstimator(),
+    private readonly safeFilePath: (document: vscode.TextDocument) => string = (document) => document.uri.fsPath,
   ) {}
 
   build(document: vscode.TextDocument, position: vscode.Position): CompletionContext {
@@ -26,6 +27,7 @@ export class ContextBuilder {
       suffix: suffixWindow.text,
       language: document.languageId,
       filePath: document.uri.fsPath,
+      safeFilePath: this.safeFilePath(document),
       cursorOffset,
       documentVersion: document.version,
       currentLine,

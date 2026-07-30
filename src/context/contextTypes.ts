@@ -15,6 +15,7 @@ export interface CompletionContext {
   suffix: string;
   language: string;
   filePath: string;
+  safeFilePath: string;
   cursorOffset: number;
   documentVersion: number;
   currentLine: string;

@@ -1,0 +1,61 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import { BackendUnavailableError, CancelledError, EndpointNotFoundError, ForbiddenError, InvalidRequestError, InvalidResponseError, NetworkError, PayloadTooLargeError, RateLimitError, TimeoutError, UnauthorizedError } from "../src/api/apiErrors";
+import { ApiCompletionRequest, BackendSettingsProvider } from "../src/api/apiTypes";
+import { DeinsCompleteClient } from "../src/api/deinsCompleteClient";
+
+const settings: BackendSettingsProvider = { getBackendUrl: () => "http://127.0.0.1:3001/", getBackendTimeoutMs: () => 500 };
+const request: ApiCompletionRequest = { context: { prefix: "const user =", suffix: "", language: "typescript", filePath: "test.ts", cursorOffset: 12 }, client: { name: "deinscomplete-vscode", version: "0.0.1" } };
+
+function response(status: number, payload: unknown, requestId = "request-1"): Response {
+  return { ok: status >= 200 && status < 300, status, headers: { get: (name: string) => name === "X-Request-ID" ? requestId : null }, json: async () => payload } as unknown as Response;
+}
+
+test("client posts completion request and validates response", async () => {
+  let url = "";
+  const client = new DeinsCompleteClient(settings, async (input, init) => {
+    url = input;
+    assert.equal(init?.method, "POST");
+    return response(200, { completion: { text: "await getUser();" }, metadata: { requestId: "request-1" } });
+  });
+  assert.deepEqual(await client.complete(request, new AbortController().signal), { completion: { text: "await getUser();" }, metadata: { requestId: "request-1" }, requestId: "request-1" });
+  assert.equal(url, "http://127.0.0.1:3001/v1/completions");
+});
+
+test("client normalizes HTTP and invalid response errors", async () => {
+  const errors = [
+    [400, InvalidRequestError], [401, UnauthorizedError], [403, ForbiddenError], [404, EndpointNotFoundError],
+    [413, PayloadTooLargeError], [429, RateLimitError], [500, BackendUnavailableError],
+  ] as const;
+  for (const [status, errorType] of errors) {
+    const client = new DeinsCompleteClient(settings, async () => response(status, {}));
+    await assert.rejects(() => client.complete(request, new AbortController().signal), errorType);
+  }
+  const malformed = new DeinsCompleteClient(settings, async () => response(200, {}));
+  await assert.rejects(() => malformed.complete(request, new AbortController().signal), InvalidResponseError);
+});
+
+test("client handles empty completions, malformed JSON, network failures, and health", async () => {
+  const empty = new DeinsCompleteClient(settings, async () => response(200, { completion: { text: "" } }));
+  const malformedJSON = new DeinsCompleteClient(settings, async () => ({ ...response(200, {}), json: async () => { throw new Error("bad JSON"); } } as Response));
+  const offline = new DeinsCompleteClient(settings, async () => { throw new Error("offline"); });
+  const healthy = new DeinsCompleteClient(settings, async () => response(200, { status: "ok" }));
+  assert.equal((await empty.complete(request, new AbortController().signal)).completion.text, "");
+  await assert.rejects(() => malformedJSON.complete(request, new AbortController().signal), InvalidResponseError);
+  await assert.rejects(() => offline.complete(request, new AbortController().signal), NetworkError);
+  assert.equal((await healthy.health()).healthy, true);
+});
+
+test("client aborts a timed out fetch", async () => {
+  const client = new DeinsCompleteClient(settings, async (_input, init) => new Promise<Response>((_resolve, reject) => {
+    init?.signal?.addEventListener("abort", () => reject(Object.assign(new Error("aborted"), { name: "AbortError" })));
+  }));
+  await assert.rejects(() => client.complete(request, new AbortController().signal), TimeoutError);
+});
+
+test("client preserves explicit cancellation", async () => {
+  const controller = new AbortController();
+  controller.abort();
+  const client = new DeinsCompleteClient(settings, async () => { throw Object.assign(new Error("aborted"), { name: "AbortError" }); });
+  await assert.rejects(() => client.complete(request, controller.signal), CancelledError);
+});

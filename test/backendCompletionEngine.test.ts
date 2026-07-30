@@ -1,0 +1,48 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import { CancelledError, NetworkError } from "../src/api/apiErrors";
+import { ApiCompletionResponse } from "../src/api/apiTypes";
+import { BackendClient } from "../src/api/deinsCompleteClient";
+import { BackendCompletionEngine, toApiCompletionRequest } from "../src/completion/backendCompletionEngine";
+import { CompletionRequest } from "../src/completion/completionTypes";
+
+const request: CompletionRequest = {
+  language: "typescript", filePath: "/private/home/project/test.ts", safeFilePath: "src/test.ts", prefix: "const user =", suffix: "",
+  cursorOffset: 12, documentVersion: 1, currentLine: "const user =", textBeforeCursorOnLine: "const user =", textAfterCursorOnLine: "", indentation: "",
+  metadata: { totalDocumentCharacters: 12, prefixCharacters: 12, suffixCharacters: 0, truncatedPrefix: false, truncatedSuffix: false, estimatedPrefixTokens: 3, estimatedSuffixTokens: 0, estimatedTotalTokens: 3, buildDurationMilliseconds: 0 },
+};
+
+class TestClient implements BackendClient {
+  constructor(private readonly result: ApiCompletionResponse | Error) {}
+  async complete(): Promise<ApiCompletionResponse> {
+    if (this.result instanceof Error) { throw this.result; }
+    return this.result;
+  }
+  async health() { return { healthy: true, latencyMs: 1 }; }
+}
+
+const logger = { debug: () => undefined };
+
+test("backend completion engine maps backend text", async () => {
+  const engine = new BackendCompletionEngine(new TestClient({ completion: { text: "await getUser();" } }), "0.0.1", logger);
+  assert.deepEqual(await engine.complete(request, new AbortController().signal), { text: "await getUser();" });
+});
+
+test("backend completion engine maps empty completion to null", async () => {
+  const engine = new BackendCompletionEngine(new TestClient({ completion: { text: "" } }), "0.0.1", logger);
+  assert.equal(await engine.complete(request, new AbortController().signal), null);
+});
+
+test("backend completion engine handles backend and cancellation errors silently", async () => {
+  const offline = new BackendCompletionEngine(new TestClient(new NetworkError("offline")), "0.0.1", logger);
+  const cancelled = new BackendCompletionEngine(new TestClient(new CancelledError("cancelled")), "0.0.1", logger);
+  assert.equal(await offline.complete(request, new AbortController().signal), null);
+  assert.equal(await cancelled.complete(request, new AbortController().signal), null);
+});
+
+test("API request mapping sends only contract fields and a safe path", () => {
+  assert.deepEqual(toApiCompletionRequest(request, "0.0.1"), {
+    context: { prefix: "const user =", suffix: "", language: "typescript", filePath: "src/test.ts", cursorOffset: 12 },
+    client: { name: "deinscomplete-vscode", version: "0.0.1" },
+  });
+});
