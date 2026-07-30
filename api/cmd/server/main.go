@@ -13,6 +13,7 @@ import (
 
 	"deinscomplete/api/internal/completion"
 	"deinscomplete/api/internal/completion/providers"
+	"deinscomplete/api/internal/completion/router"
 	"deinscomplete/api/internal/completion/sanitizer"
 	"deinscomplete/api/internal/config"
 	"deinscomplete/api/internal/logging"
@@ -36,7 +37,15 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	service := completion.NewService(provider, sanitizer.New(sanitizer.Config{MaxLines: configuration.AI.MaxCompletionLines, MaxChars: configuration.AI.MaxCompletionChars}))
+	targets := []router.Target{{ID: "primary", Provider: provider}}
+	if configuration.Router.FallbackEnabled {
+		fallback, err := providers.NewProvider(configuration.Router.Fallback, logger)
+		if err != nil {
+			return err
+		}
+		targets = append(targets, router.Target{ID: "fallback", Provider: fallback})
+	}
+	service := completion.NewService(router.New(targets, configuration.Router.MaxAttempts, configuration.Router.Timeout), sanitizer.New(sanitizer.Config{MaxLines: configuration.AI.MaxCompletionLines, MaxChars: configuration.AI.MaxCompletionChars}))
 	server := server.New(configuration, logger, service)
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()

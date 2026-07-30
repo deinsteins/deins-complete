@@ -68,3 +68,16 @@ RATE_LIMIT_BURST=10
 USAGE_QUOTA_ENABLED=true
 USAGE_QUOTA_DAILY_REQUESTS=2000
 ```
+
+## Provider fallback
+
+The backend uses the configured `AI_PROVIDER` as its primary target. Set `AI_FALLBACK_ENABLED=true` and configure one server-side fallback target to use sequential fallback for transient provider failures. The router has a shared time budget and never retries a target or races providers in parallel.
+
+```env
+AI_FALLBACK_ENABLED=true
+AI_FALLBACK_PROVIDER=mock
+AI_MAX_ROUTER_ATTEMPTS=2
+AI_ROUTER_TIMEOUT_MS=8000
+```
+
+Provider targets and routing remain invisible to VS Code users.

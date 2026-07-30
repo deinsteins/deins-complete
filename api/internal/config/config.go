@@ -32,6 +32,13 @@ type Config struct {
 	Auth        AuthConfig
 	RateLimit   RateLimitConfig
 	UsageQuota  UsageQuotaConfig
+	Router      RouterConfig
+}
+type RouterConfig struct {
+	FallbackEnabled bool
+	MaxAttempts     int
+	Timeout         time.Duration
+	Fallback        AIConfig
 }
 type RateLimitConfig struct {
 	Enabled           bool
@@ -71,6 +78,7 @@ func parse(lookup func(string) string) (Config, error) {
 		Auth:       AuthConfig{Enabled: lookup("AUTH_ENABLED") == "true", Secret: lookup("AUTH_TOKEN_SECRET"), Version: 1},
 		RateLimit:  RateLimitConfig{Enabled: lookup("RATE_LIMIT_ENABLED") == "true", RequestsPerMinute: 60, Burst: 10},
 		UsageQuota: UsageQuotaConfig{Enabled: lookup("USAGE_QUOTA_ENABLED") == "true", DailyRequests: 2000},
+		Router:     RouterConfig{FallbackEnabled: lookup("AI_FALLBACK_ENABLED") == "true", MaxAttempts: 2, Timeout: 8 * time.Second},
 	}
 
 	if rawPort := lookup("PORT"); rawPort != "" {
@@ -115,7 +123,54 @@ func parse(lookup func(string) string) (Config, error) {
 	if err := parseAIConfig(&config.AI, config.Environment, lookup); err != nil {
 		return Config{}, err
 	}
+	if err := parseRouterConfig(&config, lookup); err != nil {
+		return Config{}, err
+	}
 	return config, nil
+}
+func parseRouterConfig(c *Config, lookup func(string) string) error {
+	if raw := lookup("AI_MAX_ROUTER_ATTEMPTS"); raw != "" {
+		v, e := strconv.Atoi(raw)
+		if e != nil || v < 1 || v > 5 {
+			return fmt.Errorf("invalid AI_MAX_ROUTER_ATTEMPTS value: %s", raw)
+		}
+		c.Router.MaxAttempts = v
+	}
+	if raw := lookup("AI_ROUTER_TIMEOUT_MS"); raw != "" {
+		v, e := strconv.Atoi(raw)
+		if e != nil || v < 1000 || v > 60000 {
+			return fmt.Errorf("invalid AI_ROUTER_TIMEOUT_MS value: %s", raw)
+		}
+		c.Router.Timeout = time.Duration(v) * time.Millisecond
+	}
+	if !c.Router.FallbackEnabled {
+		return nil
+	}
+	c.Router.Fallback = AIConfig{Provider: lookup("AI_FALLBACK_PROVIDER"), Timeout: c.AI.Timeout, MaxTokens: c.AI.MaxTokens, Temperature: c.AI.Temperature, OpenAI: OpenAIConfig{BaseURL: lookup("AI_FALLBACK_BASE_URL"), APIKey: lookup("AI_FALLBACK_API_KEY"), Model: lookup("AI_FALLBACK_MODEL")}, Anthropic: AnthropicConfig{BaseURL: lookup("AI_FALLBACK_BASE_URL"), APIKey: lookup("AI_FALLBACK_API_KEY"), Model: lookup("AI_FALLBACK_MODEL"), Version: lookup("AI_FALLBACK_VERSION")}}
+	if c.Router.Fallback.Provider == "" {
+		return fmt.Errorf("AI_FALLBACK_PROVIDER is required when fallback is enabled")
+	}
+	return parseAIConfig(&c.Router.Fallback, c.Environment, func(k string) string {
+		switch k {
+		case "AI_PROVIDER":
+			return c.Router.Fallback.Provider
+		case "AI_BASE_URL":
+			return c.Router.Fallback.OpenAI.BaseURL
+		case "AI_API_KEY":
+			return c.Router.Fallback.OpenAI.APIKey
+		case "AI_MODEL":
+			return c.Router.Fallback.OpenAI.Model
+		case "ANTHROPIC_BASE_URL":
+			return c.Router.Fallback.Anthropic.BaseURL
+		case "ANTHROPIC_API_KEY":
+			return c.Router.Fallback.Anthropic.APIKey
+		case "ANTHROPIC_MODEL":
+			return c.Router.Fallback.Anthropic.Model
+		case "ANTHROPIC_VERSION":
+			return c.Router.Fallback.Anthropic.Version
+		}
+		return ""
+	})
 }
 func parseAdmissionConfig(c *Config, lookup func(string) string) error {
 	if raw := lookup("RATE_LIMIT_REQUESTS_PER_MINUTE"); raw != "" {
