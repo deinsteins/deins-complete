@@ -1,0 +1,95 @@
+openapi: 3.0.3
+info:
+  title: DeinsComplete API
+  version: 0.1.0
+  description: Provider-agnostic inline completion gateway. JSON request bodies are strict; unknown fields are rejected.
+paths:
+  /:
+    get:
+      responses:
+        '200': { description: API identity response }
+  /health:
+    get:
+      responses:
+        '200': { description: Process is alive }
+  /ready:
+    get:
+      responses:
+        '200': { description: Process is ready }
+  /v1/completions:
+    post:
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CompletionRequest' }
+      responses:
+        '200':
+          description: Completion or an empty completion when no suggestion exists.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CompletionResponse' }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '405': { $ref: '#/components/responses/MethodNotAllowed' }
+        '413': { $ref: '#/components/responses/InvalidRequest' }
+        '500': { $ref: '#/components/responses/InternalError' }
+components:
+  schemas:
+    CompletionContext:
+      type: object
+      required: [prefix, suffix, language, filePath, cursorOffset]
+      properties:
+        prefix: { type: string, maxLength: 50000 }
+        suffix: { type: string, maxLength: 25000 }
+        language: { type: string, minLength: 1, maxLength: 100 }
+        filePath: { type: string, maxLength: 4096 }
+        cursorOffset: { type: integer, minimum: 0, description: Original document offset, not a context-relative offset. }
+    Client:
+      type: object
+      properties:
+        name: { type: string, maxLength: 100 }
+        version: { type: string, maxLength: 100 }
+    CompletionRequest:
+      type: object
+      required: [context]
+      properties:
+        context: { $ref: '#/components/schemas/CompletionContext' }
+        client: { $ref: '#/components/schemas/Client' }
+    CompletionResult:
+      type: object
+      required: [text]
+      properties:
+        text: { type: string }
+    CompletionResponse:
+      type: object
+      properties:
+        completion: { $ref: '#/components/schemas/CompletionResult' }
+        metadata:
+          type: object
+          properties:
+            requestId: { type: string }
+    ApiError:
+      type: object
+      required: [code, message, requestId]
+      properties:
+        code: { type: string }
+        message: { type: string }
+        requestId: { type: string }
+    ApiErrorResponse:
+      type: object
+      properties:
+        error: { $ref: '#/components/schemas/ApiError' }
+  responses:
+    InvalidRequest:
+      description: Invalid request
+      content: { application/json: { schema: { $ref: '#/components/schemas/ApiErrorResponse' } } }
+    NotFound:
+      description: Route not found
+      content: { application/json: { schema: { $ref: '#/components/schemas/ApiErrorResponse' } } }
+    MethodNotAllowed:
+      description: Method not allowed
+      content: { application/json: { schema: { $ref: '#/components/schemas/ApiErrorResponse' } } }
+    InternalError:
+      description: Internal error
+      content: { application/json: { schema: { $ref: '#/components/schemas/ApiErrorResponse' } } }
