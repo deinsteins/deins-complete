@@ -18,6 +18,7 @@ type registration struct {
 
 func RegisterInstallations(a *auth.Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		r.Body = http.MaxBytesReader(w, r.Body, 16<<10)
 		var x registration
 		if json.NewDecoder(r.Body).Decode(&x) != nil || x.InstallationID == "" || len(x.InstallationID) > 128 {
 			response.WriteError(w, 400, "INVALID_REQUEST", "Installation registration is invalid.", middleware.GetRequestID(r.Context()))

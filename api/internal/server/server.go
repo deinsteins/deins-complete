@@ -24,7 +24,7 @@ func New(configuration config.Config, logger *slog.Logger, service *completion.S
 		Handler:           newRouter(logger, service, auth.New(configuration.Auth.Secret, configuration.Auth.Version, configuration.Auth.TokenTTL), configuration.Auth.Enabled, rateLimit(configuration), quota(configuration)),
 		ReadHeaderTimeout: 5 * time.Second,
 		IdleTimeout:       60 * time.Second,
-		MaxHeaderBytes:    1 << 20,
+		MaxHeaderBytes:    32 << 10,
 	}}
 }
 func rateLimit(c config.Config) ratelimit.Limiter {

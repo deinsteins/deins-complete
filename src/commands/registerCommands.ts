@@ -27,6 +27,15 @@ export function registerCommands(
       logger.info("DeinsComplete disabled.");
     }),
     vscode.commands.registerCommand("deinscomplete.showLogs", () => logger.show()),
+    vscode.commands.registerCommand("deinscomplete.diagnostics", async () => {
+      const stats = requests.getStats();
+      let backend = "Unavailable";
+      try { const health = await backendClient.health(); backend = `Reachable (${health.latencyMs} ms)`; } catch { /* diagnostic remains safe */ }
+      const authentication = await installation.getToken() ? "Ready" : "Not registered";
+      const average = stats.requested ? Math.round(stats.totalLatencyMs / stats.requested) : 0;
+      const report = `DeinsComplete Diagnostics\nStatus: ${lifecycle.getState()}\nBackend: ${backend}\nAuthentication: ${authentication}\nRequests: ${stats.requested}\nCache hits: ${stats.cacheHits}\nCancelled: ${stats.cancelled}\nAverage completion latency: ${average} ms`;
+      logger.info(report); void vscode.window.showInformationMessage(`DeinsComplete diagnostics: ${backend}`);
+    }),
     vscode.commands.registerCommand("deinscomplete.resetAuthentication", async () => {
       await installation.reset();
       logger.info("Installation authentication reset.");
