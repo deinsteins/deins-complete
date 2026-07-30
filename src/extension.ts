@@ -47,6 +47,10 @@ export function activate(context: vscode.ExtensionContext): void {
     const autoImports = new AutoImportResolver();
     const completionProvider = new DeinsCompleteInlineCompletionProvider(lifecycle, new ContextBuilder(config, undefined, getSafeFilePath), repositoryContext, requests, logger, autoImports);
     statusBar.update(lifecycle.getState());
+    if (!context.globalState.get<boolean>("deinscomplete.onboarding.seen")) {
+      void context.globalState.update("deinscomplete.onboarding.seen", true);
+      void vscode.window.showInformationMessage("DeinsComplete is ready. Pause after typing to see ghost text; press Tab to accept or Esc to dismiss.", "Open Diagnostics").then((choice) => { if (choice === "Open Diagnostics") void vscode.commands.executeCommand("deinscomplete.diagnostics"); });
+    }
 
     context.subscriptions.push(
       statusBar,

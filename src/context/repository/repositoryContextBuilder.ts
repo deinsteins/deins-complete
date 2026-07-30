@@ -23,7 +23,7 @@ export class RepositoryContextBuilder {
   private readonly cache = new Map<string, CachedText>();
   private readonly dependencyCache = new Map<string, CachedText>();
   private readonly tsconfigCache = new Map<string, CachedText>();
-  private readonly stats = { requests: 0, success: 0, partial: 0, timedOut: 0, filesIncluded: 0, totalDurationMs: 0, lastFiles: 0, lastCharacters: 0, lastDurationMs: 0 };
+  private readonly stats = { requests: 0, success: 0, partial: 0, timedOut: 0, filesIncluded: 0, totalDurationMs: 0, lastFiles: 0, lastCharacters: 0, lastDurationMs: 0, lastFocus: "general", lastDependencies: 0 };
 
   constructor(private readonly settings: RepositoryContextSettings) {}
 
@@ -91,6 +91,7 @@ export class RepositoryContextBuilder {
       symbols.push(...extractSymbols(text, filePath, candidate.names));
     }
     const focus = completionFocus(current);
+    this.stats.lastFocus = focus; this.stats.lastDependencies = dependencies.length;
     const diagnostics = vscode.languages.getDiagnostics(document.uri).slice(0, 3).map((item) => item.message.replace(/\s+/g, " ").slice(0, 300));
     if (!expired()) symbols.push(...await this.librarySymbols(document, current, focus, deadline));
     if (signal.aborted) return undefined;

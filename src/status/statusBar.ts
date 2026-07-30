@@ -13,5 +13,7 @@ export class DeinsCompleteStatusBar implements vscode.Disposable {
     this.item.show();
   }
 
+  setActivity(text: "Thinking…" | "Cached" | "Offline" | "Ready"): void { if (text === "Ready") return; this.item.text = `$(sparkle) DeinsComplete: ${text}`; this.item.tooltip = "DeinsComplete inline completion"; this.item.show(); }
+
   dispose(): void { this.item.dispose(); }
 }
