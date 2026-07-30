@@ -11,7 +11,11 @@ func TestTokenValidatesSignatureAndVersion(t *testing.T) {
 	if id, err := service.Validate(token); err != nil || id != "installation-1" {
 		t.Fatalf("unexpected token validation: %q %v", id, err)
 	}
-	if _, err := service.Validate(token[:len(token)-1] + "x"); err == nil {
+	replacement := "x"
+	if token[len(token)-1:] == replacement {
+		replacement = "y"
+	}
+	if _, err := service.Validate(token[:len(token)-1] + replacement); err == nil {
 		t.Fatal("expected tampered token rejection")
 	}
 	if _, err := New("01234567890123456789012345678901", 2, 0).Validate(token); err == nil {
