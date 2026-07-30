@@ -1,5 +1,7 @@
 import * as vscode from "vscode";
 import { registerCommands } from "./commands/registerCommands";
+import { DeinsCompleteInlineCompletionProvider } from "./completion/inlineCompletionProvider";
+import { MockCompletionEngine } from "./completion/mockCompletionEngine";
 import { ConfigService } from "./config/configService";
 import { DeinsCompleteLifecycle } from "./core/lifecycle";
 import { Logger } from "./logging/logger";
@@ -13,12 +15,14 @@ export function activate(context: vscode.ExtensionContext): void {
     const config = new ConfigService();
     const lifecycle = new DeinsCompleteLifecycle(config);
     const statusBar = new DeinsCompleteStatusBar();
+    const completionProvider = new DeinsCompleteInlineCompletionProvider(lifecycle, new MockCompletionEngine(), logger);
     statusBar.update(lifecycle.getState());
 
     context.subscriptions.push(
       statusBar,
       lifecycle.start(),
       lifecycle.onDidChangeState((state) => statusBar.update(state)),
+      vscode.languages.registerInlineCompletionItemProvider({ scheme: "file" }, completionProvider),
       ...registerCommands(config, lifecycle, logger),
     );
     logger.info("DeinsComplete activated.");
