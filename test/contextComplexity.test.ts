@@ -7,3 +7,4 @@ const context = (line: string, imports?: string): CompletionContext => ({ prefix
 
 test("simple syntax uses the fast completion path", () => assert.equal(completionRequestMode(context("console.")), "fast"));
 test("imported member access uses the full completion path", () => assert.equal(completionRequestMode(context("userService.", 'import { userService } from "./user";')), "full"));
+test("imports retained in the prefix also use the full completion path", () => assert.equal(completionRequestMode({ ...context('import { userService } from "./user";\nuserService.'), imports: undefined }), "full"));
