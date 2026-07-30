@@ -22,6 +22,11 @@ test("client posts completion request and validates response", async () => {
   assert.equal(url, "http://127.0.0.1:3001/v1/completions");
 });
 
+test("client uses metadata request ID when the response header is absent", async () => {
+  const client = new DeinsCompleteClient(settings, async () => response(200, { completion: { text: "log()" }, metadata: { requestId: "metadata-id" } }, ""));
+  assert.equal((await client.complete(request, new AbortController().signal)).requestId, "metadata-id");
+});
+
 test("client normalizes HTTP and invalid response errors", async () => {
   const errors = [
     [400, InvalidRequestError], [401, UnauthorizedError], [403, ForbiddenError], [404, EndpointNotFoundError],

@@ -98,10 +98,11 @@ export class DeinsCompleteClient implements BackendClient {
     if (metadata !== undefined && (!isRecord(metadata) || (metadata.requestId !== undefined && typeof metadata.requestId !== "string"))) {
       throw new InvalidResponseError("Backend completion response is invalid.", this.requestId(response));
     }
+    const requestId = this.requestId(response) || (metadata as { requestId?: string } | undefined)?.requestId;
     return {
       completion: { text: payload.completion.text },
       metadata: metadata as ApiCompletionResponse["metadata"],
-      requestId: this.requestId(response),
+      requestId,
     };
   }
 
