@@ -26,5 +26,8 @@ func repositoryPrompt(request completion.Request) string {
 	for _, file := range request.RepositoryContext.Files {
 		text += fmt.Sprintf("\n<FILE path=%q language=%q reason=%q>\n%s\n</FILE>", file.Path, file.Language, file.Reason, file.Content)
 	}
+	for _, symbol := range request.RepositoryContext.Symbols {
+		text += fmt.Sprintf("\n<SYMBOL name=%q kind=%q source=%q>%s</SYMBOL>", symbol.Name, symbol.Kind, symbol.FilePath, symbol.Signature)
+	}
 	return text + "\n</REPOSITORY_CONTEXT>"
 }

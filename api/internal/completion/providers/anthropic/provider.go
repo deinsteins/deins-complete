@@ -110,6 +110,9 @@ func userPrompt(r completion.Request) string {
 		for _, file := range r.RepositoryContext.Files {
 			prompt += "\n<FILE path=\"" + file.Path + "\" language=\"" + file.Language + "\">\n" + file.Content + "\n</FILE>"
 		}
+		for _, symbol := range r.RepositoryContext.Symbols {
+			prompt += "\n<SYMBOL name=\"" + symbol.Name + "\" kind=\"" + symbol.Kind + "\" source=\"" + symbol.FilePath + "\">" + symbol.Signature + "</SYMBOL>"
+		}
 		prompt += "\n</REPOSITORY_CONTEXT>"
 	}
 	return prompt + "\n\nReturn only the code inserted between PREFIX and SUFFIX."

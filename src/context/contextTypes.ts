@@ -26,7 +26,7 @@ export interface CompletionContext {
   metadata: CompletionContextMetadata;
 }
 
-export type RepositoryContextReason = "import" | "open-file" | "recent-file" | "symbol-reference";
+export type RepositoryContextReason = "import" | "open-file" | "recent-file" | "symbol-reference" | "framework-config";
 
 export interface RepositoryContextFile {
   path: string;

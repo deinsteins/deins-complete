@@ -4,6 +4,7 @@ import * as vscode from "vscode";
 import { CompletionContext, RepositoryContext, RepositoryContextFile, RepositoryContextReason, RepositorySymbol } from "../contextTypes";
 import { RepositoryContextSettings } from "./repositoryContextConfig";
 import { relevantDependencies } from "./dependencyContext";
+import { tsconfigAliasTargets } from "./projectConfig";
 
 const maxFileBytes = 1024 * 1024;
 const perFileCharacters = 3000;
@@ -20,6 +21,7 @@ export class RepositoryContextBuilder {
   private readonly recent = new Map<string, vscode.Uri>();
   private readonly cache = new Map<string, CachedText>();
   private readonly dependencyCache = new Map<string, CachedText>();
+  private readonly tsconfigCache = new Map<string, CachedText>();
   private readonly stats = { requests: 0, success: 0, partial: 0, timedOut: 0, filesIncluded: 0, totalDurationMs: 0, lastFiles: 0, lastCharacters: 0, lastDurationMs: 0 };
 
   constructor(private readonly settings: RepositoryContextSettings) {}
@@ -34,6 +36,7 @@ export class RepositoryContextBuilder {
   invalidate(uri: vscode.Uri): void {
     this.cache.delete(uri.toString());
     if (path.posix.basename(uri.path) === "package.json") this.dependencyCache.delete(uri.toString());
+    if (path.posix.basename(uri.path) === "tsconfig.json") this.tsconfigCache.delete(uri.toString());
   }
   getStats() { return { ...this.stats }; }
 
@@ -42,7 +45,8 @@ export class RepositoryContextBuilder {
     if (!limits.enabled || signal.aborted || !this.isWorkspaceFile(document.uri)) return undefined;
     this.stats.requests++;
     const started = performance.now();
-    const expired = () => signal.aborted || performance.now() - started >= limits.timeoutMs;
+    const deadline = started + limits.timeoutMs;
+    const expired = () => signal.aborted || performance.now() >= deadline;
     this.record(document);
     const candidates = new Map<string, Candidate>();
     const dependencies = await this.readDependencies(document);
@@ -56,6 +60,10 @@ export class RepositoryContextBuilder {
       if (expired()) break;
       const uri = await this.resolveImport(document.uri, reference.specifier);
       if (uri !== undefined) add({ uri, reason: "import", names: reference.names, score: 110 });
+    }
+    if (dependencies.includes("tailwindcss")) {
+      const config = await this.findWorkspaceFile(document.uri, ["tailwind.config.ts", "tailwind.config.js", "tailwind.config.cjs", "tailwind.config.mjs"]);
+      if (config !== undefined) add({ uri: config, reason: "framework-config", names: ["theme", "colors", "extend"], score: 100 });
     }
     for (const uri of [...this.recent.values()].reverse()) {
       if (expired()) break;
@@ -80,8 +88,10 @@ export class RepositoryContextBuilder {
       characters += content.length;
       symbols.push(...extractSymbols(text, filePath, candidate.names));
     }
+    if (!expired()) symbols.push(...await this.librarySymbols(document, current, deadline));
     if (signal.aborted) return undefined;
-    const fingerprint = createHash("sha256").update(files.map((file) => `${file.path}\0${file.content}`).join("\0")).update("\0").update(dependencies.join("\0")).digest("hex");
+    const boundedSymbols = dedupeSymbols(symbols).slice(0, 20);
+    const fingerprint = createHash("sha256").update(files.map((file) => `${file.path}\0${file.content}`).join("\0")).update("\0").update(dependencies.join("\0")).update("\0").update(boundedSymbols.map((symbol) => `${symbol.filePath}\0${symbol.name}\0${symbol.signature ?? ""}`).join("\0")).digest("hex");
     const durationMs = Math.round(performance.now() - started);
     const timedOut = durationMs >= limits.timeoutMs;
     this.stats.success++;
@@ -92,7 +102,7 @@ export class RepositoryContextBuilder {
     this.stats.lastDurationMs = durationMs;
     if (timedOut) this.stats.timedOut++;
     if (timedOut || files.length < candidates.size) this.stats.partial++;
-    return { files, symbols: dedupeSymbols(symbols).slice(0, 20), dependencies, fingerprint, durationMs, timedOut };
+    return { files, symbols: boundedSymbols, dependencies, fingerprint, durationMs, timedOut };
   }
 
   private async readDependencies(document: vscode.TextDocument): Promise<string[]> {
@@ -114,17 +124,45 @@ export class RepositoryContextBuilder {
   }
 
   private async resolveImport(from: vscode.Uri, specifier: string): Promise<vscode.Uri | undefined> {
-    const root = from.with({ path: path.posix.join(path.posix.dirname(from.path), specifier) });
+    const roots = [from.with({ path: path.posix.join(path.posix.dirname(from.path), specifier) })];
+    const folder = vscode.workspace.getWorkspaceFolder(from);
+    if (folder !== undefined) for (const target of await this.aliasTargets(folder.uri, specifier)) roots.push(folder.uri.with({ path: path.posix.join(folder.uri.path, target) }));
     const extensions = ["", ".ts", ".tsx", ".js", ".jsx", ".mts", ".cts", ".mjs", ".cjs", "/index.ts", "/index.tsx", "/index.js", "/index.jsx"];
-    for (const extension of extensions) {
+    for (const root of roots) for (const extension of extensions) {
       const uri = root.with({ path: root.path + extension });
       if (!this.isEligible(uri)) continue;
-      try {
-        const stat = await vscode.workspace.fs.stat(uri);
-        if (stat.size <= maxFileBytes && (stat.type & vscode.FileType.File) !== 0) return uri;
-      } catch { /* unresolved imports are normal */ }
+      try { const stat = await vscode.workspace.fs.stat(uri); if (stat.size <= maxFileBytes && (stat.type & vscode.FileType.File) !== 0) return uri; } catch { /* unresolved imports are normal */ }
     }
     return undefined;
+  }
+
+  private async aliasTargets(folder: vscode.Uri, specifier: string): Promise<string[]> {
+    const config = vscode.Uri.joinPath(folder, "tsconfig.json");
+    const open = vscode.workspace.textDocuments.find((item) => item.uri.toString() === config.toString());
+    let text: string | undefined;
+    if (open !== undefined) { const cached = this.tsconfigCache.get(config.toString()); text = cached?.version === open.version ? cached.text : open.getText(); this.tsconfigCache.set(config.toString(), { text, version: open.version }); }
+    else { const cached = this.tsconfigCache.get(config.toString()); if (cached !== undefined) text = cached.text; else try { text = new TextDecoder().decode(await vscode.workspace.fs.readFile(config)); this.tsconfigCache.set(config.toString(), { text }); } catch { return []; } }
+    return tsconfigAliasTargets(text, specifier);
+  }
+
+  private async findWorkspaceFile(from: vscode.Uri, names: string[]): Promise<vscode.Uri | undefined> {
+    const folder = vscode.workspace.getWorkspaceFolder(from);
+    if (folder === undefined) return undefined;
+    for (const name of names) {
+      const uri = vscode.Uri.joinPath(folder.uri, name);
+      try { const stat = await vscode.workspace.fs.stat(uri); if (stat.size <= maxFileBytes && (stat.type & vscode.FileType.File) !== 0) return uri; } catch { /* optional config */ }
+    }
+    return undefined;
+  }
+
+  private async librarySymbols(document: vscode.TextDocument, current: CompletionContext, deadline: number): Promise<RepositorySymbol[]> {
+    const names = new Set(identifiersNearCursor(current));
+    const imports = extractExternalImports(document.getText()).filter((reference) => reference.names.some((name) => names.has(name))).slice(0, 3);
+    const remaining = Math.min(20, Math.max(0, deadline - performance.now()));
+    if (imports.length === 0 || remaining === 0) return [];
+    const hover = await beforeDeadline(vscode.commands.executeCommand<vscode.Hover[]>("vscode.executeHoverProvider", document.uri, document.positionAt(current.cursorOffset)), remaining);
+    const signature = hover === undefined ? "" : hover.map((item) => item.contents.map(hoverContent).join("\n")).join("\n").replace(/\s+/g, " ").slice(0, 500);
+    return imports.flatMap((reference) => reference.names.filter((name) => names.has(name)).map((name) => ({ name, kind: "library-symbol", filePath: `package:${reference.specifier}`, signature: `${name} from ${reference.specifier}${signature === "" ? "" : ` — ${signature}`}` })));
   }
 
   private async readText(uri: vscode.Uri): Promise<string | undefined> {
@@ -163,6 +201,13 @@ function extractLocalImports(text: string): ImportReference[] {
   return imports;
 }
 
+function extractExternalImports(text: string): ImportReference[] {
+  const imports: ImportReference[] = [];
+  const pattern = /import\s+([^'";]+?)\s+from\s+["']((?!\.)[^"']+)["']/g;
+  for (const match of text.matchAll(pattern)) imports.push({ specifier: match[2], names: (match[1] ?? "").match(/[A-Za-z_$][\w$]*/g) ?? [] });
+  return imports;
+}
+
 function identifiersNearCursor(context: CompletionContext): string[] {
   return `${context.currentLine}\n${context.prefix.slice(-500)}`.match(/[A-Za-z_$][\w$]*/g) ?? [];
 }
@@ -192,3 +237,8 @@ function safeRelativePath(uri: vscode.Uri): string { return vscode.workspace.asR
 function languageFor(uri: vscode.Uri): string { return path.posix.extname(uri.path).slice(1) || "text"; }
 function containsSensitiveContent(text: string): boolean { return /-----BEGIN (?:[A-Z ]+ )?PRIVATE KEY-----|(?:API_KEY|SECRET|PASSWORD)\s*=/i.test(text); }
 function escapeRegExp(value: string): string { return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); }
+function hoverContent(value: vscode.MarkedString | vscode.MarkdownString): string { return typeof value === "string" ? value : "language" in value ? `${value.language} ${value.value}` : value.value; }
+async function beforeDeadline<T>(action: Thenable<T>, milliseconds: number): Promise<T | undefined> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try { return await Promise.race([Promise.resolve(action).catch(() => undefined), new Promise<undefined>((resolve) => { timer = setTimeout(() => resolve(undefined), milliseconds); })]); } finally { if (timer !== undefined) clearTimeout(timer); }
+}

@@ -141,9 +141,9 @@ func TestPromptAndBaseURLNormalization(t *testing.T) {
 
 func TestPromptIncludesRepositoryContext(t *testing.T) {
 	request := testRequest()
-	request.RepositoryContext = &completion.RepositoryContext{Files: []completion.RepositoryContextFile{{Path: "src/types/user.ts", Language: "typescript", Content: "export interface User { ID string }", Reason: "import"}}, Dependencies: []string{"antd"}}
+	request.RepositoryContext = &completion.RepositoryContext{Files: []completion.RepositoryContextFile{{Path: "src/types/user.ts", Language: "typescript", Content: "export interface User { ID string }", Reason: "import"}}, Dependencies: []string{"antd"}, Symbols: []completion.RepositorySymbol{{Name: "Button", Kind: "library-symbol", FilePath: "package:antd", Signature: "Button from antd"}}}
 	messages := BuildMessages(request)
-	if !strings.Contains(messages[1].Content, "src/types/user.ts") || !strings.Contains(messages[1].Content, "export interface User") || !strings.Contains(messages[1].Content, "antd") {
+	if !strings.Contains(messages[1].Content, "src/types/user.ts") || !strings.Contains(messages[1].Content, "export interface User") || !strings.Contains(messages[1].Content, "antd") || !strings.Contains(messages[1].Content, "Button from antd") {
 		t.Fatal("repository context missing from prompt")
 	}
 }
