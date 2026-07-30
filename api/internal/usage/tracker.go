@@ -33,6 +33,11 @@ func (t *InMemory) CheckAndConsume(_ context.Context, id string, amount int) Res
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	now := t.now().UTC()
+	for key, stale := range t.entries {
+		if now.Sub(stale.last) > 24*time.Hour {
+			delete(t.entries, key)
+		}
+	}
 	day := now.Format("2006-01-02")
 	e := t.entries[id]
 	if e.day != day {

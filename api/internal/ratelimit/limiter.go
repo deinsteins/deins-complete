@@ -32,6 +32,11 @@ func (l *InMemory) Allow(_ context.Context, id string) Result {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	now := l.now()
+	for key, stale := range l.buckets {
+		if now.Sub(stale.last) > 24*time.Hour {
+			delete(l.buckets, key)
+		}
+	}
 	b := l.buckets[id]
 	if b.last.IsZero() {
 		b.tokens = float64(l.burst)
