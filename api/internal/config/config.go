@@ -19,6 +19,7 @@ type AIConfig struct {
 	Temperature                                                 float64
 	MaxCompletionLines                                          int
 	MaxCompletionChars                                          int
+	CandidateCount                                              int
 	OpenAI                                                      OpenAIConfig
 	Anthropic                                                   AnthropicConfig
 }
@@ -87,7 +88,7 @@ func parse(lookup func(string) string) (Config, error) {
 			Timeout:            10 * time.Second,
 			MaxTokens:          128,
 			Temperature:        0.1,
-			MaxCompletionLines: 20, MaxCompletionChars: 8000,
+			MaxCompletionLines: 20, MaxCompletionChars: 8000, CandidateCount: 1,
 		},
 		Auth:       AuthConfig{Enabled: lookup("AUTH_ENABLED") == "true", Secret: lookup("AUTH_TOKEN_SECRET"), Version: 1},
 		RateLimit:  RateLimitConfig{Enabled: lookup("RATE_LIMIT_ENABLED") == "true", RequestsPerMinute: 60, Burst: 10},
@@ -245,6 +246,13 @@ func parseAIConfig(config *AIConfig, environment string, lookup func(string) str
 			return fmt.Errorf("invalid AI_MAX_TOKENS value: %s", raw)
 		}
 		config.MaxTokens = value
+	}
+	if raw := lookup("AI_CANDIDATE_COUNT"); raw != "" {
+		value, err := strconv.Atoi(raw)
+		if err != nil || value < 1 || value > 3 {
+			return fmt.Errorf("invalid AI_CANDIDATE_COUNT: %s", raw)
+		}
+		config.CandidateCount = value
 	}
 	if raw := lookup("AI_TEMPERATURE"); raw != "" {
 		value, err := strconv.ParseFloat(raw, 64)

@@ -27,6 +27,7 @@ type Provider struct {
 	timeout                 time.Duration
 	maxTokens               int
 	temperature             float64
+	candidateCount          int
 	apiMode, completionMode string
 	fim                     fim.Config
 	client                  *http.Client
@@ -45,7 +46,8 @@ func New(configuration config.AIConfig, logger *slog.Logger) (*Provider, error) 
 	return &Provider{
 		baseURL: baseURL, apiKey: configuration.OpenAI.APIKey, model: configuration.OpenAI.Model,
 		timeout: configuration.Timeout, maxTokens: configuration.MaxTokens, temperature: configuration.Temperature,
-		apiMode: configuration.APIMode, completionMode: configuration.CompletionMode, fim: fim.Config{PrefixToken: configuration.FIMPrefixToken, SuffixToken: configuration.FIMSuffixToken, MiddleToken: configuration.FIMMiddleToken, EndToken: configuration.FIMEndToken},
+		candidateCount: configuration.CandidateCount,
+		apiMode:        configuration.APIMode, completionMode: configuration.CompletionMode, fim: fim.Config{PrefixToken: configuration.FIMPrefixToken, SuffixToken: configuration.FIMSuffixToken, MiddleToken: configuration.FIMMiddleToken, EndToken: configuration.FIMEndToken},
 		client: &http.Client{Transport: transport}, logger: logger,
 	}, nil
 }
@@ -58,7 +60,7 @@ func (provider *Provider) Complete(ctx context.Context, request completion.Reque
 	defer cancel()
 	startedAt := time.Now()
 	body, err := json.Marshal(ChatCompletionRequest{
-		Model: provider.model, Messages: BuildMessages(request), Temperature: provider.temperature, MaxTokens: provider.maxTokens, Stream: false,
+		Model: provider.model, Messages: BuildMessages(request), Temperature: provider.temperature, MaxTokens: provider.maxTokens, Stream: false, N: provider.candidateCount,
 	})
 	if err != nil {
 		return completion.Result{}, completion.NewProviderError(completion.ProviderInvalidResponse, err)
@@ -90,10 +92,11 @@ func (provider *Provider) Complete(ctx context.Context, request completion.Reque
 	if err := json.NewDecoder(io.LimitReader(response.Body, maxProviderResponseBytes)).Decode(&payload); err != nil {
 		return completion.Result{}, completion.NewProviderError(completion.ProviderInvalidResponse, err)
 	}
-	if len(payload.Choices) == 0 || strings.TrimSpace(payload.Choices[0].Message.Content) == "" {
+	text := bestChoice(request, payload.Choices)
+	if text == "" {
 		return completion.Result{}, nil
 	}
-	result := completion.Result{Text: payload.Choices[0].Message.Content, FinishReason: payload.Choices[0].FinishReason}
+	result := completion.Result{Text: text, FinishReason: payload.Choices[0].FinishReason}
 	if payload.Usage != nil {
 		result.PromptTokens = payload.Usage.PromptTokens
 		result.CompletionTokens = payload.Usage.CompletionTokens
@@ -101,6 +104,45 @@ func (provider *Provider) Complete(ctx context.Context, request completion.Reque
 	}
 	provider.logger.Debug("provider request completed", "provider", "openai-compatible", "model", provider.model, "duration_ms", time.Since(startedAt).Milliseconds())
 	return result, nil
+}
+
+func bestChoice(request completion.Request, choices []struct {
+	Message struct {
+		Content string `json:"content"`
+	} `json:"message"`
+	FinishReason string `json:"finish_reason"`
+}) string {
+	best, bestScore := "", int(^uint(0)>>1)
+	prefix := request.Context.Prefix[max(0, len(request.Context.Prefix)-80):]
+	for _, choice := range choices {
+		text := strings.TrimSpace(choice.Message.Content)
+		if text == "" {
+			continue
+		}
+		score := len(text)
+		if prefix != "" && strings.Contains(text, prefix) {
+			score += 10000
+		}
+		if request.Context.Suffix != "" && strings.Contains(text, request.Context.Suffix[:min(80, len(request.Context.Suffix))]) {
+			score += 1000
+		}
+		if score < bestScore {
+			best, bestScore = choice.Message.Content, score
+		}
+	}
+	return best
+}
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+func max(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
 }
 
 // StreamComplete consumes the OpenAI-compatible SSE format used by MiMo.
