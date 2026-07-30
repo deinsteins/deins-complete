@@ -44,6 +44,8 @@ jobs:
         run: |
           git fetch --tags
           ! git rev-parse -q --verify "refs/tags/$TAG"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git tag -a "$TAG" -m "DeinsComplete $TAG"
           git push origin "$TAG"
       - uses: docker/setup-qemu-action@v3
