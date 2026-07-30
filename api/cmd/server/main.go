@@ -49,7 +49,10 @@ func run() error {
 		targets = append(targets, router.Target{ID: "fallback", Provider: fallback})
 	}
 	service := completion.NewService(router.New(targets, configuration.Router.MaxAttempts, configuration.Router.Timeout), sanitizer.New(sanitizer.Config{MaxLines: configuration.AI.MaxCompletionLines, MaxChars: configuration.AI.MaxCompletionChars}))
-	server := server.New(configuration, logger, service)
+	server, err := server.New(configuration, logger, service)
+	if err != nil {
+		return err
+	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
