@@ -23,7 +23,10 @@ func (r *Redis) Allow(ctx context.Context, id string) Result {
 	refill := float64(r.perMinute) / float64(time.Minute)
 	out, err := tokenBucket.Run(ctx, r.client, []string{storage.InstallationKey(id) + ":ratelimit"}, r.burst, now.UnixNano(), refill, (5 * time.Minute).Milliseconds()).Int64Slice()
 	if err != nil || len(out) != 3 {
-		return Result{}
+		if err == nil {
+			err = redis.ErrClosed
+		}
+		return Result{Err: err}
 	}
 	return Result{Allowed: out[0] == 1, Remaining: int(out[1]), RetryAfter: time.Duration(out[2])}
 }

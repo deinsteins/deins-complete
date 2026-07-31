@@ -100,6 +100,9 @@ func parse(lookup func(string) string) (Config, error) {
 	if config.Redis.Enabled && config.Redis.Addr == "" {
 		return Config{}, fmt.Errorf("REDIS_ADDR is required when REDIS_ENABLED=true")
 	}
+	if err := parseRedisConfig(&config.Redis, lookup); err != nil {
+		return Config{}, err
+	}
 
 	if rawPort := lookup("PORT"); rawPort != "" {
 		port, err := strconv.Atoi(rawPort)
@@ -147,6 +150,37 @@ func parse(lookup func(string) string) (Config, error) {
 		return Config{}, err
 	}
 	return config, nil
+}
+
+func parseRedisConfig(redisConfig *RedisConfig, lookup func(string) string) error {
+	if raw := lookup("REDIS_DB"); raw != "" {
+		value, err := strconv.Atoi(raw)
+		if err != nil || value < 0 || value > 255 {
+			return fmt.Errorf("invalid REDIS_DB value: %s", raw)
+		}
+		redisConfig.DB = value
+	}
+	durationValues := []struct {
+		key    string
+		target *time.Duration
+	}{
+		{"REDIS_CONNECT_TIMEOUT_MS", &redisConfig.ConnectTimeout},
+		{"REDIS_READ_TIMEOUT_MS", &redisConfig.ReadTimeout},
+		{"REDIS_WRITE_TIMEOUT_MS", &redisConfig.WriteTimeout},
+	}
+	for _, item := range durationValues {
+		if raw := lookup(item.key); raw != "" {
+			value, err := strconv.Atoi(raw)
+			if err != nil || value < 50 || value > 30000 {
+				return fmt.Errorf("invalid %s value: %s", item.key, raw)
+			}
+			*item.target = time.Duration(value) * time.Millisecond
+		}
+	}
+	if raw := lookup("REDIS_TLS_ENABLED"); raw != "" && raw != "true" && raw != "false" {
+		return fmt.Errorf("invalid REDIS_TLS_ENABLED value: %s", raw)
+	}
+	return nil
 }
 func parseRouterConfig(c *Config, lookup func(string) string) error {
 	if raw := lookup("AI_MAX_ROUTER_ATTEMPTS"); raw != "" {

@@ -64,3 +64,14 @@ test("client preserves explicit cancellation", async () => {
   const client = new DeinsCompleteClient(settings, async () => { throw Object.assign(new Error("aborted"), { name: "AbortError" }); });
   await assert.rejects(() => client.complete(request, controller.signal), CancelledError);
 });
+
+test("client applies a short cooldown after infrastructure 503", async () => {
+  let calls = 0;
+  const client = new DeinsCompleteClient(settings, async () => {
+    calls++;
+    return response(503, { error: { code: "SERVICE_UNAVAILABLE" } });
+  });
+  await assert.rejects(() => client.complete(request, new AbortController().signal), BackendUnavailableError);
+  await assert.rejects(() => client.complete(request, new AbortController().signal), BackendUnavailableError);
+  assert.equal(calls, 1);
+});

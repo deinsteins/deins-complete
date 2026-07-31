@@ -23,7 +23,10 @@ func (t *Redis) CheckAndConsume(ctx context.Context, id string, amount int) Resu
 	key := storage.InstallationKey(id) + ":usage:" + now.Format("2006-01-02")
 	out, err := quota.Run(ctx, t.client, []string{key}, amount, t.daily, storage.ExpireAtNextUTCDay(now).Milliseconds()).Int64Slice()
 	if err != nil || len(out) != 2 {
-		return Result{}
+		if err == nil {
+			err = redis.ErrClosed
+		}
+		return Result{Err: err}
 	}
 	return Result{Allowed: out[0] == 1, Count: int(out[1]), RetryAfter: time.Until(now.Truncate(24 * time.Hour).Add(24 * time.Hour))}
 }

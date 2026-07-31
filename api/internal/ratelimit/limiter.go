@@ -10,6 +10,7 @@ type Result struct {
 	Allowed    bool
 	Remaining  int
 	RetryAfter time.Duration
+	Err        error
 }
 type Limiter interface {
 	Allow(context.Context, string) Result

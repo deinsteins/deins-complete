@@ -42,7 +42,7 @@ export class DeinsCompleteClient implements BackendClient {
   ) {}
 
   async complete(request: ApiCompletionRequest, signal: AbortSignal): Promise<ApiCompletionResponse> {
-    if (Date.now() < this.unavailableUntil) throw new RateLimitError("Backend completion is cooling down.");
+    this.ensureAvailable();
     const startedAt = Date.now();
     const response = await this.send("/v1/completions", {
       method: "POST",
@@ -54,6 +54,7 @@ export class DeinsCompleteClient implements BackendClient {
     return payload;
   }
   async streamComplete(request: ApiCompletionRequest, signal: AbortSignal): Promise<ApiCompletionResponse> {
+    this.ensureAvailable();
     const response = await this.send("/v1/completions/stream", { method: "POST", headers: this.headers({ "Content-Type": "application/json", Accept: "text/event-stream" }), body: JSON.stringify(request) }, signal);
     if (response.body === null) throw new InvalidResponseError("Backend stream is unavailable.", this.requestId(response));
     const startedAt = performance.now(); const reader = response.body.getReader(); const decoder = new TextDecoder(); let buffer = ""; let text = ""; let requestId = this.requestId(response); let firstChunkMs: number | undefined;
@@ -102,7 +103,11 @@ export class DeinsCompleteClient implements BackendClient {
       const response = await this.fetchFunction(`${backendUrl}${path}`, { ...init, signal: cancellation.signal });
       if (!response.ok) {
         const error = await statusError(response, this.requestId(response));
-        if (error instanceof RateLimitError || error instanceof QuotaExceededError) this.unavailableUntil = Date.now() + (error.retryAfterSeconds ?? 1) * 1000;
+        if (error instanceof RateLimitError || error instanceof QuotaExceededError) {
+          this.unavailableUntil = Date.now() + (error.retryAfterSeconds ?? 1) * 1000;
+        } else if (error instanceof BackendUnavailableError && response.status === 503) {
+          this.unavailableUntil = Date.now() + 2_000;
+        }
         throw error;
       }
       return response;
@@ -152,6 +157,11 @@ export class DeinsCompleteClient implements BackendClient {
 
   private requestId(response: Response): string | undefined {
     return response.headers.get("X-Request-ID") ?? undefined;
+  }
+  private ensureAvailable(): void {
+    if (Date.now() < this.unavailableUntil) {
+      throw new BackendUnavailableError("Backend completion is temporarily unavailable.", undefined, 503);
+    }
   }
   private headers(headers: Record<string,string>): Record<string,string> { return this.token ? {...headers,Authorization:`Bearer ${this.token}`} : headers; }
 }

@@ -15,11 +15,13 @@ services:
   redis:
     image: redis:7-alpine
     restart: unless-stopped
-    command: ["redis-server", "--appendonly", "yes"]
+    command: ["/bin/sh", "-c", "exec redis-server --appendonly yes $${REDIS_PASSWORD:+--requirepass \"$${REDIS_PASSWORD}\"}"]
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
     expose: ["6379"]
     volumes: [redis_data:/data]
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD-SHELL", "if [ -n \"$$REDIS_PASSWORD\" ]; then redis-cli -a \"$$REDIS_PASSWORD\" --no-auth-warning ping; else redis-cli ping; fi"]
       interval: 10s
       timeout: 3s
       retries: 5

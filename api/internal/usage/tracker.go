@@ -10,6 +10,7 @@ type Result struct {
 	Allowed    bool
 	Count      int
 	RetryAfter time.Duration
+	Err        error
 }
 type Tracker interface {
 	CheckAndConsume(context.Context, string, int) Result

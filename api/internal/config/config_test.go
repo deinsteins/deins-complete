@@ -1,6 +1,9 @@
 package config
 
-import "testing"
+import (
+	"testing"
+	"time"
+)
 
 func TestParseDefaults(t *testing.T) {
 	configuration, err := parse(func(string) string { return "" })
@@ -55,5 +58,47 @@ func TestParseValidatesOnlyActiveAnthropicConfiguration(t *testing.T) {
 	})
 	if err == nil {
 		t.Fatal("expected Anthropic configuration error")
+	}
+}
+
+func TestParseRedisConfiguration(t *testing.T) {
+	values := map[string]string{
+		"REDIS_ENABLED":            "true",
+		"REDIS_ADDR":               "redis:6379",
+		"REDIS_DB":                 "3",
+		"REDIS_TLS_ENABLED":        "false",
+		"REDIS_CONNECT_TIMEOUT_MS": "500",
+		"REDIS_READ_TIMEOUT_MS":    "250",
+		"REDIS_WRITE_TIMEOUT_MS":   "300",
+	}
+	configuration, err := parse(func(key string) string { return values[key] })
+	if err != nil {
+		t.Fatal(err)
+	}
+	if configuration.Redis.DB != 3 ||
+		configuration.Redis.ConnectTimeout != 500*time.Millisecond ||
+		configuration.Redis.ReadTimeout != 250*time.Millisecond ||
+		configuration.Redis.WriteTimeout != 300*time.Millisecond {
+		t.Fatalf("unexpected Redis configuration: %#v", configuration.Redis)
+	}
+}
+
+func TestParseRejectsInvalidRedisConfiguration(t *testing.T) {
+	for key, value := range map[string]string{
+		"REDIS_DB":                 "-1",
+		"REDIS_TLS_ENABLED":        "sometimes",
+		"REDIS_CONNECT_TIMEOUT_MS": "20",
+	} {
+		t.Run(key, func(t *testing.T) {
+			_, err := parse(func(candidate string) string {
+				if candidate == key {
+					return value
+				}
+				return ""
+			})
+			if err == nil {
+				t.Fatalf("expected %s validation error", key)
+			}
+		})
 	}
 }

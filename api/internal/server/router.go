@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"log/slog"
 	"net/http"
 
@@ -15,12 +16,12 @@ import (
 	"deinscomplete/api/internal/usage"
 )
 
-func newRouter(logger *slog.Logger, service *completion.Service, authService *auth.Service, enabled bool, streaming bool, limiter ratelimit.Limiter, tracker usage.Tracker) http.Handler {
+func newRouter(logger *slog.Logger, service *completion.Service, authService *auth.Service, enabled bool, streaming bool, limiter ratelimit.Limiter, tracker usage.Tracker, readiness func(context.Context) error) http.Handler {
 	router := chi.NewRouter()
 	router.Use(middleware.RequestID, middleware.Recovery(logger), middleware.Logging(logger))
 	router.Get("/", handlers.Root)
 	router.Get("/health", handlers.Health)
-	router.Get("/ready", handlers.Ready)
+	router.Get("/ready", handlers.Ready(readiness))
 	router.Post("/v1/installations/register", handlers.RegisterInstallations(authService))
 	completionHandler := http.Handler(handlers.NewCompletionHandler(service, logger))
 	if enabled {
