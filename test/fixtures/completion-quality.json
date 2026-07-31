@@ -1,0 +1,56 @@
+[
+  {
+    "name": "simple local member completion",
+    "language": "typescript",
+    "filePath": "src/logger.ts",
+    "prefix": "console.",
+    "imports": "",
+    "expectedMode": "fast",
+    "expectedFocus": "member-access"
+  },
+  {
+    "name": "imported service member completion",
+    "language": "typescript",
+    "filePath": "src/controllers/userController.ts",
+    "prefix": "userService.",
+    "imports": "import { userService } from \"../services/userService\";",
+    "expectedMode": "full",
+    "expectedFocus": "member-access"
+  },
+  {
+    "name": "React component props",
+    "language": "typescriptreact",
+    "filePath": "src/components/ProductCard.tsx",
+    "prefix": "<ProductCard ",
+    "imports": "import { ProductCard } from \"./ProductCard\";",
+    "expectedMode": "full",
+    "expectedFocus": "component-props"
+  },
+  {
+    "name": "Material UI component props",
+    "language": "typescriptreact",
+    "filePath": "src/pages/Checkout.tsx",
+    "prefix": "<Button ",
+    "imports": "import Button from \"@mui/material/Button\";",
+    "expectedMode": "full",
+    "expectedFocus": "component-props"
+  },
+  {
+    "name": "Tailwind class completion",
+    "language": "typescriptreact",
+    "filePath": "src/components/Hero.tsx",
+    "prefix": "<section className=\"grid ",
+    "imports": "",
+    "expectedMode": "full",
+    "expectedFocus": "tailwind-class"
+  },
+  {
+    "name": "imported function arguments",
+    "language": "typescript",
+    "filePath": "src/orders/create.ts",
+    "prefix": "createOrder(",
+    "imports": "import { createOrder } from \"./service\";",
+    "expectedMode": "full",
+    "expectedFocus": "function-arguments"
+  }
+]
