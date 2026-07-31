@@ -6,6 +6,7 @@ import { RepositoryContextSettings } from "./repositoryContextConfig";
 import { relevantDependencies } from "./dependencyContext";
 import { tsconfigAliasTargets } from "./projectConfig";
 import { CompletionFocus, completionFocus } from "../../completion/contextComplexity";
+import { declarationEntry, extractDeclarationSymbols, packageRoot } from "./libraryDeclarations";
 
 const maxFileBytes = 1024 * 1024;
 const perFileCharacters = 3000;
@@ -175,13 +176,44 @@ export class RepositoryContextBuilder {
     const remaining = Math.min(20, Math.max(0, deadline - performance.now()));
     if (imports.length === 0 || remaining === 0) return [];
     const source = `package:${imports[0].specifier}`;
+    const declarations = this.libraryDeclarationSymbols(document, imports, deadline);
     const members = focus === "component-props" || focus === "member-access"
       ? await this.providerMembers(document, current, source, Math.min(remaining, 12)) : [];
     const hoverRemaining = Math.min(20, Math.max(0, deadline - performance.now()));
     if (hoverRemaining === 0) return members;
     const hover = await beforeDeadline(vscode.commands.executeCommand<vscode.Hover[]>("vscode.executeHoverProvider", document.uri, document.positionAt(current.cursorOffset)), hoverRemaining);
     const signature = hover === undefined ? "" : hover.map((item) => item.contents.map(hoverContent).join("\n")).join("\n").replace(/\s+/g, " ").slice(0, 500);
-    return [...members, ...imports.flatMap((reference) => reference.names.filter((name) => names.has(name)).map((name) => ({ name, kind: "library-symbol", filePath: `package:${reference.specifier}`, signature: `${name} from ${reference.specifier}${signature === "" ? "" : ` — ${signature}`}` })))];
+    return [...members, ...await declarations, ...imports.flatMap((reference) => reference.names.filter((name) => names.has(name)).map((name) => ({ name, kind: "library-symbol", filePath: `package:${reference.specifier}`, signature: `${name} from ${reference.specifier}${signature === "" ? "" : ` — ${signature}`}` })))];
+  }
+
+  private async libraryDeclarationSymbols(document: vscode.TextDocument, imports: ImportReference[], deadline: number): Promise<RepositorySymbol[]> {
+    const folder = vscode.workspace.getWorkspaceFolder(document.uri);
+    if (folder === undefined) return [];
+    const symbols: RepositorySymbol[] = [];
+    for (const reference of imports.slice(0, 2)) {
+      if (performance.now() >= deadline) break;
+      const root = vscode.Uri.joinPath(folder.uri, "node_modules", ...packageRoot(reference.specifier).split("/"));
+      const manifest = await this.readSmallFile(vscode.Uri.joinPath(root, "package.json"), deadline);
+      if (manifest === undefined) continue;
+      const declaration = await this.readSmallFile(vscode.Uri.joinPath(root, ...declarationEntry(manifest).split("/")), deadline);
+      if (declaration !== undefined) symbols.push(...extractDeclarationSymbols(declaration, reference.names, reference.specifier));
+    }
+    return symbols;
+  }
+
+  private async readSmallFile(uri: vscode.Uri, deadline: number): Promise<string | undefined> {
+    const cached = this.cache.get(uri.toString());
+    if (cached !== undefined) return cached.text;
+    const remaining = Math.max(0, deadline - performance.now());
+    if (remaining === 0) return undefined;
+    const stat = await beforeDeadline(vscode.workspace.fs.stat(uri), remaining);
+    if (stat === undefined || stat.size > maxFileBytes || (stat.type & vscode.FileType.File) === 0) return undefined;
+    const bytes = await beforeDeadline(vscode.workspace.fs.readFile(uri), Math.max(0, deadline - performance.now()));
+    if (bytes === undefined) return undefined;
+    const text = new TextDecoder().decode(bytes);
+    this.cache.set(uri.toString(), { text });
+    while (this.cache.size > 40) this.cache.delete(this.cache.keys().next().value as string);
+    return text;
   }
 
   private async providerMembers(document: vscode.TextDocument, current: CompletionContext, source: string, milliseconds: number): Promise<RepositorySymbol[]> {
