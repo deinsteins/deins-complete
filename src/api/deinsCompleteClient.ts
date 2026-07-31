@@ -34,7 +34,7 @@ export interface BackendClient {
 }
 
 export interface AccountApiClient {
-  requestMagicCode(email: string, signal?: AbortSignal): Promise<void>;
+  requestMagicCode(email: string, inviteCode?: string, signal?: AbortSignal): Promise<void>;
   verifyMagicCode(email: string, code: string, signal?: AbortSignal): Promise<AccountTokens>;
   refreshAccount(refreshToken: string, signal?: AbortSignal): Promise<AccountTokens>;
   logoutAccount(refreshToken: string, signal?: AbortSignal): Promise<void>;
@@ -98,8 +98,8 @@ export class DeinsCompleteClient implements BackendClient, AccountApiClient {
     }, signal);
     const payload=await this.parseJSON(response);if(!isRecord(payload)||!isRecord(payload.installation)||payload.installation.id!==installationId||typeof payload.token!=="string"||payload.token==="")throw new InvalidResponseError("Installation response is invalid.");return payload.token;
   }
-  async requestMagicCode(email: string, signal?: AbortSignal): Promise<void> {
-    await this.sendJSON("/v1/auth/magic/request", { email }, undefined, signal);
+  async requestMagicCode(email: string, inviteCode?: string, signal?: AbortSignal): Promise<void> {
+    await this.sendJSON("/v1/auth/magic/request", { email, ...(inviteCode === undefined || inviteCode === "" ? {} : { inviteCode }) }, undefined, signal);
   }
   async verifyMagicCode(email: string, code: string, signal?: AbortSignal): Promise<AccountTokens> {
     return this.tokens(await this.sendJSON("/v1/auth/magic/verify", { email, code }, undefined, signal));

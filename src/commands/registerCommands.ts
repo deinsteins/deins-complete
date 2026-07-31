@@ -60,7 +60,9 @@ export function registerCommands(
       if (email === undefined) return;
       try {
         await installation.ensureRegistered();
-        await account.requestMagicCode(email.trim());
+        const inviteCode = await vscode.window.showInputBox({ prompt: "Invite code (leave blank if you already have an account)", ignoreFocusOut: true, password: true });
+        if (inviteCode === undefined) return;
+        await account.requestMagicCode(email.trim(), inviteCode.trim());
         const code = await vscode.window.showInputBox({ prompt: "Enter the code sent to your email", ignoreFocusOut: true, password: true, validateInput: (value) => value.trim() === "" ? "Enter the sign-in code." : undefined });
         if (code === undefined) return;
         await account.verifyMagicCode(email.trim(), code.trim(), await installation.getToken());

@@ -84,7 +84,7 @@ test("client supports the separate magic-code account authentication contract", 
     if (url.endsWith("/account/entitlements")) return response(200, { plan: "free", features: { repositoryContext: false, streaming: true, premiumRouting: false }, limits: { monthlyCompletions: 2000, used: 1, remaining: 1999 } });
     return response(204, {});
   });
-  await client.requestMagicCode("user@example.com");
+  await client.requestMagicCode("user@example.com", "invite-code");
   assert.deepEqual(await client.verifyMagicCode("user@example.com", "123456"), { accessToken: "access", refreshToken: "refresh", expiresIn: 1800 });
   assert.equal((await client.getEntitlements("access")).limits.remaining, 1999);
   await client.linkInstallation("access", "installation-token");

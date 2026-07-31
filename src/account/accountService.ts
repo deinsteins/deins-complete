@@ -8,7 +8,7 @@ export class AccountService {
   constructor(private readonly client: AccountApiClient, private readonly store: CredentialStore) {}
 
   async isSignedIn(): Promise<boolean> { return (await this.store.getAccountRefreshToken()) !== undefined; }
-  requestMagicCode(email: string, signal?: AbortSignal): Promise<void> { return this.client.requestMagicCode(email, signal); }
+  requestMagicCode(email: string, inviteCode?: string, signal?: AbortSignal): Promise<void> { return this.client.requestMagicCode(email, inviteCode, signal); }
   async verifyMagicCode(email: string, code: string, installationToken: string | undefined, signal?: AbortSignal): Promise<void> {
     const tokens = await this.client.verifyMagicCode(email, code, signal);
     await this.store.setAccountTokens(tokens.accessToken, tokens.refreshToken);
