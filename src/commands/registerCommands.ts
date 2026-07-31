@@ -8,7 +8,7 @@ import { InstallationService } from "../identity/installationService";
 import { RepositoryContextBuilder } from "../context/repository/repositoryContextBuilder";
 import { BackendCompletionEngine } from "../completion/backendCompletionEngine";
 import { FeedbackService } from "../feedback/feedbackService";
-import { AutoImportResolver, AutoImportPlan } from "../completion/autoImportResolver";
+import { AutoImportResolver } from "../completion/autoImportResolver";
 
 export function registerCommands(
   config: ConfigService,
@@ -54,7 +54,7 @@ export function registerCommands(
     vscode.commands.registerCommand("deinscomplete.clearCompletionCache", () => { requests.clearCache(); logger.info("Completion cache cleared."); void vscode.window.showInformationMessage("DeinsComplete completion cache cleared."); }),
     vscode.commands.registerCommand("deinscomplete.feedbackHelpful", () => { feedback.record("helpful"); logger.info("Completion feedback=helpful"); }),
     vscode.commands.registerCommand("deinscomplete.feedbackNotHelpful", () => { feedback.record("not-helpful"); logger.info("Completion feedback=not-helpful"); }),
-    vscode.commands.registerCommand("deinscomplete.applyAutoImport", (plan: AutoImportPlan) => autoImports.apply(plan).catch(() => logger.debug("Verified auto-import was not applied"))),
+    vscode.commands.registerCommand("deinscomplete.applyAutoImport", (uri: vscode.Uri, position: vscode.Position, completion: string) => autoImports.resolveAndApply(uri, position, completion).catch(() => logger.debug("Verified auto-import was not applied"))),
     vscode.commands.registerCommand("deinscomplete.showCompletionStats", () => { const stats=requests.getStats(); logger.info(`Completion stats requests=${stats.requested} backend=${stats.backendRequests} cacheHits=${stats.cacheHits} deduplicated=${stats.deduplicated} cancelled=${stats.cancelled}`); void vscode.window.showInformationMessage(`DeinsComplete: ${stats.backendRequests} backend requests · ${stats.cacheHits} cache hits`); }),
     vscode.commands.registerCommand("deinscomplete.checkBackend", async () => {
       try {

@@ -52,8 +52,9 @@ export class DeinsCompleteInlineCompletionProvider implements vscode.InlineCompl
       }
 
       this.logger.debug("Inline completion produced result");
-      const plan = await this.autoImports.resolve(document, position, result.text).catch(() => undefined);
-      const command = plan === undefined ? undefined : { command: "deinscomplete.applyAutoImport", title: "Apply verified import", arguments: [plan] };
+      const command = this.autoImports.canResolve(result.text)
+        ? { command: "deinscomplete.applyAutoImport", title: "Apply verified import", arguments: [document.uri, position, result.text] }
+        : undefined;
       return [new vscode.InlineCompletionItem(result.text, new vscode.Range(position, position), command)];
     } catch (error) {
       this.logger.error("Inline completion failed", error);
