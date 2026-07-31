@@ -42,6 +42,14 @@ test("account requirement is discovered once and cached", async () => {
   assert.equal(await service.isRequired(), true); assert.equal(await service.isRequired(), true); assert.equal(calls, 1);
 });
 
+test("account service links a persisted sign-in only once per activation", async () => {
+  let links = 0; const api = client(); api.linkInstallation = async () => { links++; };
+  const store = credentials(); await store.setAccountTokens("access", "refresh");
+  const service = new AccountService(api, store);
+  await service.ensureLinked("installation"); await service.ensureLinked("installation");
+  assert.equal(links, 1);
+});
+
 test("account status resolves account, entitlements, and installations", async () => {
   const service = new AccountService(client(), credentials());
   await service.verifyMagicCode("user@example.com", "123456", undefined);

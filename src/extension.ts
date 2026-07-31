@@ -32,10 +32,22 @@ export function activate(context: vscode.ExtensionContext): void {
     const installation = new InstallationService(() => getInstallationId(context.globalState), credentials, backendClient);
     const account = new AccountService(backendClient, credentials);
     let accountNoticeShown = false;
+    const ensureAccountLinked = async (): Promise<boolean> => {
+      try {
+        await installation.ensureRegistered();
+        const token = await installation.getToken();
+        if (token === undefined) return false;
+        await account.ensureLinked(token);
+        return true;
+      } catch (error) {
+        logger.debug("Account installation linking is unavailable");
+        return false;
+      }
+    };
     const canComplete = async (): Promise<boolean> => {
       try {
         if (!await account.isRequired()) return true;
-        if (await account.isSignedIn()) return true;
+        if (await account.isSignedIn() && await ensureAccountLinked()) return true;
         statusBar.setSignInRequired();
         if (!accountNoticeShown) { accountNoticeShown = true; void vscode.window.showInformationMessage("Sign in to DeinsComplete to enable inline completions.", "Sign In").then((choice) => { if (choice === "Sign In") void vscode.commands.executeCommand("deinscomplete.signIn"); }); }
         return false;
@@ -58,6 +70,7 @@ export function activate(context: vscode.ExtensionContext): void {
       await authenticate(signal);
     };
     void authenticate(new AbortController().signal).catch(() => logger.debug("Installation registration deferred"));
+    void account.isSignedIn().then((signedIn) => { if (signedIn) void ensureAccountLinked(); });
     let quotaNotified = false;
     const engine = new BackendCompletionEngine(backendClient, extensionVersion, logger, authenticate, refreshAuthentication, () => {
       if (!quotaNotified) { quotaNotified = true; void vscode.window.showWarningMessage("DeinsComplete daily completion limit reached."); }
