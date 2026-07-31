@@ -81,3 +81,9 @@ test("API request mapping includes bounded repository context but not its cache 
   });
   assert.equal(JSON.stringify(toApiCompletionRequest(withRepository, "0.0.1")).includes("private-cache-key"), false);
 });
+
+test("API request mapping uses smaller member-access context budgets", () => {
+  const large: CompletionRequest = { ...request, prefix: "p".repeat(5000), suffix: "s".repeat(3000), repositoryContext: { files: [{ path: "a.ts", language: "ts", content: "r".repeat(5000), reason: "import" }], focus: "member-access", fingerprint: "x", durationMs: 1, timedOut: false } };
+  const mapped = toApiCompletionRequest(large, "0.0.1");
+  assert.equal(mapped.context.prefix.length, 1500); assert.equal(mapped.context.suffix.length, 500); assert.equal(mapped.repositoryContext?.files[0].content.length, 2000);
+});

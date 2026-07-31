@@ -2,7 +2,11 @@ package completion
 
 import (
 	"context"
+	"errors"
+	"strings"
 )
+
+var errUsefulLineComplete = errors.New("useful completion line complete")
 
 type Service struct {
 	provider  Provider
@@ -43,9 +47,33 @@ func (service *Service) Stream(ctx context.Context, request Request, onChunk fun
 		return service.Complete(ctx, request)
 	}
 	var raw string
-	err := stream.StreamComplete(ctx, request, func(chunk string) error { raw += chunk; return onChunk(chunk) })
-	if err != nil {
+	err := stream.StreamComplete(ctx, request, func(chunk string) error {
+		raw += chunk
+		if err := onChunk(chunk); err != nil {
+			return err
+		}
+		if singleLineFocus(request) && strings.Contains(raw, "\n") {
+			return errUsefulLineComplete
+		}
+		return nil
+	})
+	if errors.Is(err, errUsefulLineComplete) {
+		raw = raw[:strings.Index(raw, "\n")]
+	}
+	if err != nil && !errors.Is(err, errUsefulLineComplete) {
 		return Result{}, err
 	}
 	return Result{Text: service.sanitizer.Sanitize(request, raw)}, nil
+}
+
+func singleLineFocus(request Request) bool {
+	if request.RepositoryContext == nil {
+		return false
+	}
+	switch request.RepositoryContext.Focus {
+	case "component-props", "member-access", "function-arguments", "tailwind-class":
+		return true
+	default:
+		return false
+	}
 }

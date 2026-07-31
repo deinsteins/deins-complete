@@ -64,10 +64,11 @@ export class BackendCompletionEngine implements CompletionEngine {
 }
 
 export function toApiCompletionRequest(request: CompletionRequest, version: string): ApiCompletionRequest {
+  const limits = contextLimits(request.repositoryContext?.focus);
   const apiRequest: ApiCompletionRequest = {
     context: {
-      prefix: request.prefix,
-      suffix: request.suffix,
+      prefix: request.prefix.slice(-limits.prefix),
+      suffix: request.suffix.slice(0, limits.suffix),
       language: request.language,
       filePath: request.safeFilePath,
       cursorOffset: request.cursorOffset,
@@ -75,8 +76,14 @@ export function toApiCompletionRequest(request: CompletionRequest, version: stri
     client: { name: "deinscomplete-vscode", version },
   };
   if (request.repositoryContext !== undefined) {
+    let remaining = limits.repository;
+    const files = request.repositoryContext.files.flatMap((file) => {
+      if (remaining <= 0) return [];
+      const content = file.content.slice(0, remaining); remaining -= content.length;
+      return [{ ...file, content }];
+    });
     apiRequest.repositoryContext = {
-      files: request.repositoryContext.files,
+      files,
       symbols: request.repositoryContext.symbols,
       ...(request.repositoryContext.dependencies !== undefined ? { dependencies: request.repositoryContext.dependencies } : {}),
       ...(request.repositoryContext.focus !== undefined ? { focus: request.repositoryContext.focus } : {}),
@@ -84,4 +91,14 @@ export function toApiCompletionRequest(request: CompletionRequest, version: stri
     };
   }
   return apiRequest;
+}
+
+function contextLimits(focus?: string): { prefix: number; suffix: number; repository: number } {
+  switch (focus) {
+    case "member-access": return { prefix: 1500, suffix: 500, repository: 2000 };
+    case "component-props": return { prefix: 2500, suffix: 1000, repository: 4000 };
+    case "function-arguments": return { prefix: 2500, suffix: 1000, repository: 4000 };
+    case "tailwind-class": return { prefix: 2000, suffix: 500, repository: 3000 };
+    default: return { prefix: 4000, suffix: 2000, repository: 8000 };
+  }
 }
