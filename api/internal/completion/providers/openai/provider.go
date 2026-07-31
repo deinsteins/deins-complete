@@ -47,7 +47,11 @@ func New(configuration config.AIConfig, logger *slog.Logger) (*Provider, error) 
 		baseURL: baseURL, apiKey: configuration.OpenAI.APIKey, model: configuration.OpenAI.Model,
 		timeout: configuration.Timeout, maxTokens: configuration.MaxTokens, temperature: configuration.Temperature,
 		candidateCount: configuration.CandidateCount,
-		apiMode:        configuration.APIMode, completionMode: configuration.CompletionMode, fim: fim.Config{PrefixToken: configuration.FIMPrefixToken, SuffixToken: configuration.FIMSuffixToken, MiddleToken: configuration.FIMMiddleToken, EndToken: configuration.FIMEndToken},
+		apiMode:        configuration.APIMode, completionMode: configuration.CompletionMode, fim: fim.Config{
+			PrefixToken: configuration.FIMPrefixToken, SuffixToken: configuration.FIMSuffixToken,
+			MiddleToken: configuration.FIMMiddleToken, EndToken: configuration.FIMEndToken,
+			FilenameContext: configuration.FIMFilenameContext,
+		},
 		client: &http.Client{Transport: transport}, logger: logger,
 	}, nil
 }

@@ -14,6 +14,7 @@ type AIConfig struct {
 	CompletionMode                                              string
 	APIMode                                                     string
 	FIMPrefixToken, FIMSuffixToken, FIMMiddleToken, FIMEndToken string
+	FIMFilenameContext                                          bool
 	Timeout                                                     time.Duration
 	MaxTokens                                                   int
 	Temperature                                                 float64
@@ -83,6 +84,7 @@ func parse(lookup func(string) string) (Config, error) {
 			Provider:       valueOrDefault(lookup("AI_PROVIDER"), "mock"),
 			CompletionMode: valueOrDefault(lookup("AI_COMPLETION_MODE"), "chat"), APIMode: valueOrDefault(lookup("AI_API_MODE"), "chat"),
 			FIMPrefixToken: lookup("AI_FIM_PREFIX_TOKEN"), FIMSuffixToken: lookup("AI_FIM_SUFFIX_TOKEN"), FIMMiddleToken: lookup("AI_FIM_MIDDLE_TOKEN"), FIMEndToken: lookup("AI_FIM_END_TOKEN"),
+			FIMFilenameContext: lookup("AI_FIM_FILENAME_CONTEXT_ENABLED") == "true",
 			OpenAI:             OpenAIConfig{BaseURL: lookup("AI_BASE_URL"), APIKey: lookup("AI_API_KEY"), Model: lookup("AI_MODEL")},
 			Anthropic:          AnthropicConfig{BaseURL: lookup("ANTHROPIC_BASE_URL"), APIKey: lookup("ANTHROPIC_API_KEY"), Model: lookup("ANTHROPIC_MODEL"), Version: lookup("ANTHROPIC_VERSION")},
 			Timeout:            10 * time.Second,
@@ -200,7 +202,7 @@ func parseRouterConfig(c *Config, lookup func(string) string) error {
 	if !c.Router.FallbackEnabled {
 		return nil
 	}
-	c.Router.Fallback = AIConfig{Provider: lookup("AI_FALLBACK_PROVIDER"), CompletionMode: valueOrDefault(lookup("AI_FALLBACK_COMPLETION_MODE"), "chat"), APIMode: valueOrDefault(lookup("AI_FALLBACK_API_MODE"), "chat"), FIMPrefixToken: lookup("AI_FALLBACK_FIM_PREFIX_TOKEN"), FIMSuffixToken: lookup("AI_FALLBACK_FIM_SUFFIX_TOKEN"), FIMMiddleToken: lookup("AI_FALLBACK_FIM_MIDDLE_TOKEN"), FIMEndToken: lookup("AI_FALLBACK_FIM_END_TOKEN"), Timeout: c.AI.Timeout, MaxTokens: c.AI.MaxTokens, Temperature: c.AI.Temperature, OpenAI: OpenAIConfig{BaseURL: lookup("AI_FALLBACK_BASE_URL"), APIKey: lookup("AI_FALLBACK_API_KEY"), Model: lookup("AI_FALLBACK_MODEL")}, Anthropic: AnthropicConfig{BaseURL: lookup("AI_FALLBACK_BASE_URL"), APIKey: lookup("AI_FALLBACK_API_KEY"), Model: lookup("AI_FALLBACK_MODEL"), Version: lookup("AI_FALLBACK_VERSION")}}
+	c.Router.Fallback = AIConfig{Provider: lookup("AI_FALLBACK_PROVIDER"), CompletionMode: valueOrDefault(lookup("AI_FALLBACK_COMPLETION_MODE"), "chat"), APIMode: valueOrDefault(lookup("AI_FALLBACK_API_MODE"), "chat"), FIMPrefixToken: lookup("AI_FALLBACK_FIM_PREFIX_TOKEN"), FIMSuffixToken: lookup("AI_FALLBACK_FIM_SUFFIX_TOKEN"), FIMMiddleToken: lookup("AI_FALLBACK_FIM_MIDDLE_TOKEN"), FIMEndToken: lookup("AI_FALLBACK_FIM_END_TOKEN"), FIMFilenameContext: lookup("AI_FALLBACK_FIM_FILENAME_CONTEXT_ENABLED") == "true", Timeout: c.AI.Timeout, MaxTokens: c.AI.MaxTokens, Temperature: c.AI.Temperature, OpenAI: OpenAIConfig{BaseURL: lookup("AI_FALLBACK_BASE_URL"), APIKey: lookup("AI_FALLBACK_API_KEY"), Model: lookup("AI_FALLBACK_MODEL")}, Anthropic: AnthropicConfig{BaseURL: lookup("AI_FALLBACK_BASE_URL"), APIKey: lookup("AI_FALLBACK_API_KEY"), Model: lookup("AI_FALLBACK_MODEL"), Version: lookup("AI_FALLBACK_VERSION")}}
 	if c.Router.Fallback.Provider == "" {
 		return fmt.Errorf("AI_FALLBACK_PROVIDER is required when fallback is enabled")
 	}
@@ -222,6 +224,8 @@ func parseRouterConfig(c *Config, lookup func(string) string) error {
 			return c.Router.Fallback.Anthropic.Model
 		case "ANTHROPIC_VERSION":
 			return c.Router.Fallback.Anthropic.Version
+		case "AI_FIM_FILENAME_CONTEXT_ENABLED":
+			return lookup("AI_FALLBACK_FIM_FILENAME_CONTEXT_ENABLED")
 		}
 		return ""
 	})
@@ -260,6 +264,9 @@ func parseAIConfig(config *AIConfig, environment string, lookup func(string) str
 	}
 	if config.CompletionMode == "fim" && (config.FIMPrefixToken == "" || config.FIMSuffixToken == "" || config.FIMMiddleToken == "") {
 		return fmt.Errorf("FIM prefix, suffix, and middle tokens are required")
+	}
+	if raw := lookup("AI_FIM_FILENAME_CONTEXT_ENABLED"); raw != "" && raw != "true" && raw != "false" {
+		return fmt.Errorf("invalid AI_FIM_FILENAME_CONTEXT_ENABLED value: %s", raw)
 	}
 	if config.APIMode == "completion" && config.CompletionMode != "fim" {
 		return fmt.Errorf("completion API mode requires FIM completion mode")

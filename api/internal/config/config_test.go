@@ -102,3 +102,18 @@ func TestParseRejectsInvalidRedisConfiguration(t *testing.T) {
 		})
 	}
 }
+
+func TestParseFIMFilenameContextIsExplicit(t *testing.T) {
+	values := map[string]string{
+		"AI_FIM_FILENAME_CONTEXT_ENABLED": "true",
+	}
+	configuration, err := parse(func(key string) string { return values[key] })
+	if err != nil || !configuration.AI.FIMFilenameContext {
+		t.Fatalf("unexpected FIM filename configuration: %#v, %v", configuration.AI, err)
+	}
+
+	values["AI_FIM_FILENAME_CONTEXT_ENABLED"] = "yes"
+	if _, err := parse(func(key string) string { return values[key] }); err == nil {
+		t.Fatal("expected invalid FIM filename context error")
+	}
+}
