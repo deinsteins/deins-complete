@@ -45,10 +45,10 @@ func newRouter(logger *slog.Logger, service *completion.Service, authService *au
 	completionHandler := http.Handler(handlers.NewCompletionHandler(service, logger))
 	if enabled {
 		if repo != nil {
-			completionHandler = middleware.Entitlements(repo)(completionHandler)
 			if monthly != nil {
 				completionHandler = middleware.MonthlyQuota(monthly)(completionHandler)
 			}
+			completionHandler = middleware.Entitlements(repo)(completionHandler)
 			completionHandler = middleware.RequireLinkedAccount(accountRequired)(completionHandler)
 			completionHandler = middleware.InstallationStatus(repo)(completionHandler)
 		}
@@ -65,10 +65,10 @@ func newRouter(logger *slog.Logger, service *completion.Service, authService *au
 		streamHandler := http.Handler(handlers.NewStreamHandler(service, logger))
 		if enabled {
 			if repo != nil {
-				streamHandler = middleware.Entitlements(repo)(streamHandler)
 				if monthly != nil {
 					streamHandler = middleware.MonthlyQuota(monthly)(streamHandler)
 				}
+				streamHandler = middleware.Entitlements(repo)(streamHandler)
 				streamHandler = middleware.RequireLinkedAccount(accountRequired)(streamHandler)
 				streamHandler = middleware.InstallationStatus(repo)(streamHandler)
 			}

@@ -8,12 +8,17 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 
+	"deinscomplete/api/internal/account"
 	"deinscomplete/api/internal/auth"
 	"deinscomplete/api/internal/completion"
 	"deinscomplete/api/internal/completion/providers"
+	"deinscomplete/api/internal/usage"
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type providerErrorProvider struct{}
@@ -152,6 +157,52 @@ func TestAuthenticatedCompletionAndRegistration(t *testing.T) {
 	router.ServeHTTP(headerAuthorized, headerRequest)
 	if headerAuthorized.Code != http.StatusOK {
 		t.Fatalf("installation-header authorized completion: %d", headerAuthorized.Code)
+	}
+}
+
+func TestLinkedInstallationReachesCompletionAfterEntitlementResolution(t *testing.T) {
+	databaseURL := os.Getenv("DATABASE_URL")
+	if databaseURL == "" {
+		t.Skip("DATABASE_URL is not configured")
+	}
+	pool, err := pgxpool.New(context.Background(), databaseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer pool.Close()
+	repo := account.NewRepository(pool)
+	user, err := repo.CreateUser(context.Background(), account.CreateUserParams{Email: uuid.NewString() + "@example.test"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	installation, err := repo.EnsureInstallation(context.Background(), uuid.NewString())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = repo.LinkInstallation(context.Background(), installation.ID, user.ID); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		_, _ = pool.Exec(context.Background(), `DELETE FROM installations WHERE id=$1`, installation.ID)
+		_, _ = pool.Exec(context.Background(), `DELETE FROM user_entitlements WHERE user_id=$1`, user.ID)
+		_, _ = pool.Exec(context.Background(), `DELETE FROM users WHERE id=$1`, user.ID)
+	})
+
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	authService := auth.New("01234567890123456789012345678901", 1, 0)
+	router := newRouter(logger, completion.NewService(providers.MockProvider{}), authService, true, true, nil, nil, usage.NewMonthly(), nil, repo, nil, nil, true)
+	token, err := authService.Issue(installation.InstallationKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range []string{"/v1/completions", "/v1/completions/stream"} {
+		request := httptest.NewRequest(http.MethodPost, path, strings.NewReader(`{"context":{"prefix":"const user =","suffix":"","language":"typescript","filePath":"test.ts","cursorOffset":12}}`))
+		request.Header.Set("Authorization", "Bearer "+token)
+		response := httptest.NewRecorder()
+		router.ServeHTTP(response, request)
+		if response.Code != http.StatusOK {
+			t.Fatalf("%s: %d %s", path, response.Code, response.Body.String())
+		}
 	}
 }
 
