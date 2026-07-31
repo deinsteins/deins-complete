@@ -10,6 +10,7 @@ import {
   BackendSettingsProvider,
 } from "./apiTypes";
 import {
+	AccountRequiredError,
 	ApiError,
   BackendUnavailableError,
   CancelledError,
@@ -43,6 +44,7 @@ export interface AccountApiClient {
   linkInstallation(accessToken: string, installationToken: string, signal?: AbortSignal): Promise<void>;
   getAccountInstallations(accessToken: string, signal?: AbortSignal): Promise<AccountInstallation[]>;
   revokeAccountInstallation(accessToken: string, installationID: string, signal?: AbortSignal): Promise<void>;
+  getAccountRequirement(signal?: AbortSignal): Promise<boolean>;
 }
 
 type FetchFunction = (input: string, init?: RequestInit) => Promise<Response>;
@@ -134,6 +136,11 @@ export class DeinsCompleteClient implements BackendClient, AccountApiClient {
   }
   async revokeAccountInstallation(accessToken: string, installationID: string, signal?: AbortSignal): Promise<void> {
     await this.sendJSON(`/v1/account/installations/${encodeURIComponent(installationID)}`, undefined, accessToken, signal, "DELETE");
+  }
+  async getAccountRequirement(signal?: AbortSignal): Promise<boolean> {
+    const payload = await this.sendJSON("/v1/account/requirement", undefined, undefined, signal, "GET");
+    if (!isRecord(payload) || typeof payload.accountRequired !== "boolean") throw new InvalidResponseError("Account requirement response is invalid.");
+    return payload.accountRequired;
   }
 
   async health(signal?: AbortSignal): Promise<BackendHealthResult> {
@@ -255,6 +262,7 @@ async function statusError(response: Response, requestId?: string): Promise<Erro
   const retryAfter = Number.isFinite(retry) && retry > 0 ? retry : undefined;
   let code = "";
   try { const body = await response.clone().json() as { error?: { code?: string } }; code = body.error?.code ?? ""; } catch { /* status fallback */ }
+  if (code === "ACCOUNT_REQUIRED") return new AccountRequiredError("Sign in is required to use DeinsComplete.", requestId, status);
   switch (status) {
     case 400: return new InvalidRequestError("Backend rejected the completion request.", requestId, status);
     case 401: return new UnauthorizedError("Backend authorization failed.", requestId, status);

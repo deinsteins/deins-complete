@@ -1,13 +1,19 @@
 import { AccountApiClient } from "../api/deinsCompleteClient";
 import { AccountEntitlements } from "../api/apiTypes";
-import { UnauthorizedError } from "../api/apiErrors";
+import { EndpointNotFoundError, UnauthorizedError } from "../api/apiErrors";
 import { CredentialStore } from "../security/credentialStore";
 import { AccountStatus } from "./accountTypes";
 
 export class AccountService {
+  private required: boolean | undefined;
   constructor(private readonly client: AccountApiClient, private readonly store: CredentialStore) {}
 
   async isSignedIn(): Promise<boolean> { return (await this.store.getAccountRefreshToken()) !== undefined; }
+  async isRequired(signal?: AbortSignal): Promise<boolean> {
+    if (this.required !== undefined) return this.required;
+    try { this.required = await this.client.getAccountRequirement(signal); } catch (error) { if (error instanceof EndpointNotFoundError) this.required = false; else throw error; }
+    return this.required;
+  }
   requestMagicCode(email: string, inviteCode?: string, signal?: AbortSignal): Promise<void> { return this.client.requestMagicCode(email, inviteCode, signal); }
   async verifyMagicCode(email: string, code: string, installationToken: string | undefined, signal?: AbortSignal): Promise<void> {
     const tokens = await this.client.verifyMagicCode(email, code, signal);

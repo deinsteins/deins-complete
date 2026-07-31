@@ -12,6 +12,7 @@ export class NetworkError extends ApiError {}
 export class InvalidResponseError extends ApiError {}
 export class InvalidRequestError extends ApiError {}
 export class UnauthorizedError extends ApiError {}
+export class AccountRequiredError extends UnauthorizedError {}
 export class ForbiddenError extends ApiError {}
 export class EndpointNotFoundError extends ApiError {}
 export class PayloadTooLargeError extends ApiError {}

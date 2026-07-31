@@ -20,6 +20,7 @@ function client(): AccountApiClient {
     linkInstallation: async () => undefined,
     getAccountInstallations: async () => [{ id: "installation-1", status: "active", createdAt: "2026-01-01T00:00:00Z" }],
     revokeAccountInstallation: async () => undefined,
+    getAccountRequirement: async () => false,
   };
 }
 
@@ -33,6 +34,12 @@ test("account service stores only account tokens in SecretStorage and links afte
   assert.equal(linked, "installation-token");
   await service.signOut();
   assert.equal(await service.isSignedIn(), false);
+});
+
+test("account requirement is discovered once and cached", async () => {
+  let calls = 0; const api = client(); api.getAccountRequirement = async () => { calls++; return true; };
+  const service = new AccountService(api, credentials());
+  assert.equal(await service.isRequired(), true); assert.equal(await service.isRequired(), true); assert.equal(calls, 1);
 });
 
 test("account status resolves account, entitlements, and installations", async () => {

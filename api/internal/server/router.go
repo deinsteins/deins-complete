@@ -18,13 +18,14 @@ import (
 	"deinscomplete/api/internal/usage"
 )
 
-func newRouter(logger *slog.Logger, service *completion.Service, authService *auth.Service, enabled bool, streaming bool, limiter ratelimit.Limiter, tracker usage.Tracker, monthly usage.MonthlyTracker, readiness func(context.Context) error, repo *account.Repository, accounts *account.Service, accountTokens *accountauth.Service) http.Handler {
+func newRouter(logger *slog.Logger, service *completion.Service, authService *auth.Service, enabled bool, streaming bool, limiter ratelimit.Limiter, tracker usage.Tracker, monthly usage.MonthlyTracker, readiness func(context.Context) error, repo *account.Repository, accounts *account.Service, accountTokens *accountauth.Service, accountRequired bool) http.Handler {
 	router := chi.NewRouter()
 	router.Use(middleware.RequestID, middleware.Recovery(logger), middleware.Logging(logger))
 	router.Get("/", handlers.Root)
 	router.Get("/health", handlers.Health)
 	router.Get("/ready", handlers.Ready(readiness))
 	router.Post("/v1/installations/register", handlers.RegisterInstallations(authService, repo))
+	router.Get("/v1/account/requirement", handlers.AccountRequirement(accountRequired))
 	if accounts != nil && accountTokens != nil && repo != nil {
 		h := handlers.NewAccountHandler(accounts, monthly)
 		authRoutes := chi.NewRouter()
@@ -48,6 +49,7 @@ func newRouter(logger *slog.Logger, service *completion.Service, authService *au
 			if monthly != nil {
 				completionHandler = middleware.MonthlyQuota(monthly)(completionHandler)
 			}
+			completionHandler = middleware.RequireLinkedAccount(accountRequired)(completionHandler)
 			completionHandler = middleware.InstallationStatus(repo)(completionHandler)
 		}
 		if tracker != nil {
@@ -67,6 +69,7 @@ func newRouter(logger *slog.Logger, service *completion.Service, authService *au
 				if monthly != nil {
 					streamHandler = middleware.MonthlyQuota(monthly)(streamHandler)
 				}
+				streamHandler = middleware.RequireLinkedAccount(accountRequired)(streamHandler)
 				streamHandler = middleware.InstallationStatus(repo)(streamHandler)
 			}
 			if tracker != nil {

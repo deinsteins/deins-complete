@@ -15,6 +15,12 @@ type AccountHandler struct {
 	monthly usage.MonthlyTracker
 }
 
+func AccountRequirement(required bool) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		response.WriteJSON(w, http.StatusOK, map[string]bool{"accountRequired": required})
+	}
+}
+
 func NewAccountHandler(s *account.Service, m usage.MonthlyTracker) *AccountHandler {
 	return &AccountHandler{service: s, monthly: m}
 }

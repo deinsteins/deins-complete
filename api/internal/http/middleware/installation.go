@@ -77,6 +77,22 @@ func Entitlements(repo *account.Repository) func(http.Handler) http.Handler {
 		})
 	}
 }
+func RequireLinkedAccount(required bool) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if !required {
+				next.ServeHTTP(w, r)
+				return
+			}
+			installation, ok := InstallationFromContext(r.Context())
+			if !ok || installation.Installation.UserID == "" {
+				response.WriteError(w, http.StatusUnauthorized, "ACCOUNT_REQUIRED", "Sign in is required to use DeinsComplete.", GetRequestID(r.Context()))
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
+}
 func EntitlementsFromContext(ctx context.Context) (account.Entitlements, bool) {
 	v, ok := ctx.Value(entitlementKey{}).(account.Entitlements)
 	return v, ok

@@ -31,6 +31,15 @@ export function activate(context: vscode.ExtensionContext): void {
     const credentials = new CredentialStore(context.secrets);
     const installation = new InstallationService(() => getInstallationId(context.globalState), credentials, backendClient);
     const account = new AccountService(backendClient, credentials);
+    let accountNoticeShown = false;
+    const canComplete = async (): Promise<boolean> => {
+      try {
+        if (!await account.isRequired()) return true;
+        if (await account.isSignedIn()) return true;
+        if (!accountNoticeShown) { accountNoticeShown = true; void vscode.window.showInformationMessage("Sign in to DeinsComplete to enable inline completions.", "Sign In").then((choice) => { if (choice === "Sign In") void vscode.commands.executeCommand("deinscomplete.signIn"); }); }
+        return false;
+      } catch { return true; } // Existing/temporarily unavailable backend retains its normal behavior.
+    };
     const refreshAccountStatus = async (): Promise<void> => {
       try {
         const status = await account.getStatus();
@@ -67,7 +76,7 @@ export function activate(context: vscode.ExtensionContext): void {
     const repositoryContext = new RepositoryContextBuilder(config);
     const feedback = new FeedbackService();
     const autoImports = new AutoImportResolver();
-    const completionProvider = new DeinsCompleteInlineCompletionProvider(lifecycle, new ContextBuilder(config, undefined, getSafeFilePath), repositoryContext, requests, logger, autoImports, feedback);
+    const completionProvider = new DeinsCompleteInlineCompletionProvider(lifecycle, new ContextBuilder(config, undefined, getSafeFilePath), repositoryContext, requests, logger, autoImports, feedback, canComplete);
     statusBar.update(lifecycle.getState());
     void refreshAccountStatus();
     const accountRefresh = setInterval(() => void refreshAccountStatus(), 10 * 60 * 1000);

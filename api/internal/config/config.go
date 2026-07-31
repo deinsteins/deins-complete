@@ -78,6 +78,7 @@ type DatabaseConfig struct {
 	ConnMaxLifetime            time.Duration
 }
 type AccountConfig struct {
+	Required                                       bool
 	RegistrationMode                               string
 	AccessTokenSecret                              string
 	AccessTokenTTL, RefreshTokenTTL                time.Duration
@@ -114,7 +115,7 @@ func parse(lookup func(string) string) (Config, error) {
 		Streaming:  lookup("STREAMING_ENABLED") == "true",
 		Redis:      RedisConfig{Enabled: lookup("REDIS_ENABLED") == "true", Addr: lookup("REDIS_ADDR"), Username: lookup("REDIS_USERNAME"), Password: lookup("REDIS_PASSWORD"), TLS: lookup("REDIS_TLS_ENABLED") == "true", ConnectTimeout: 2 * time.Second, ReadTimeout: time.Second, WriteTimeout: time.Second},
 		Database:   DatabaseConfig{Enabled: lookup("DATABASE_ENABLED") == "true", URL: lookup("DATABASE_URL"), MaxOpenConns: 10, MaxIdleConns: 5, ConnMaxLifetime: 30 * time.Minute},
-		Account:    AccountConfig{RegistrationMode: valueOrDefault(lookup("REGISTRATION_MODE"), "invite"), AccessTokenSecret: lookup("ACCOUNT_ACCESS_TOKEN_SECRET"), AccessTokenTTL: 30 * time.Minute, RefreshTokenTTL: 30 * 24 * time.Hour, MagicCodeTTL: 15 * time.Minute, SMTPAddr: lookup("ACCOUNT_SMTP_ADDR"), SMTPFrom: lookup("ACCOUNT_SMTP_FROM"), SMTPUsername: lookup("ACCOUNT_SMTP_USERNAME"), SMTPPassword: lookup("ACCOUNT_SMTP_PASSWORD")},
+		Account:    AccountConfig{Required: lookup("ACCOUNT_REQUIRED") == "true", RegistrationMode: valueOrDefault(lookup("REGISTRATION_MODE"), "invite"), AccessTokenSecret: lookup("ACCOUNT_ACCESS_TOKEN_SECRET"), AccessTokenTTL: 30 * time.Minute, RefreshTokenTTL: 30 * 24 * time.Hour, MagicCodeTTL: 15 * time.Minute, SMTPAddr: lookup("ACCOUNT_SMTP_ADDR"), SMTPFrom: lookup("ACCOUNT_SMTP_FROM"), SMTPUsername: lookup("ACCOUNT_SMTP_USERNAME"), SMTPPassword: lookup("ACCOUNT_SMTP_PASSWORD")},
 	}
 	if config.Redis.Enabled && config.Redis.Addr == "" {
 		return Config{}, fmt.Errorf("REDIS_ADDR is required when REDIS_ENABLED=true")
@@ -176,6 +177,9 @@ func parse(lookup func(string) string) (Config, error) {
 
 func parseDatabaseConfig(config *Config, lookup func(string) string) error {
 	if !config.Database.Enabled {
+		if config.Account.Required {
+			return fmt.Errorf("DATABASE_ENABLED must be true when ACCOUNT_REQUIRED=true")
+		}
 		return nil
 	}
 	if config.Database.URL == "" {

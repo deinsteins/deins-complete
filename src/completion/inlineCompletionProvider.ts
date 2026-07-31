@@ -21,6 +21,7 @@ export class DeinsCompleteInlineCompletionProvider implements vscode.InlineCompl
     private readonly logger: Logger,
     private readonly autoImports: AutoImportResolver,
     private readonly feedback: FeedbackService,
+    private readonly canComplete: () => Promise<boolean> = async () => true,
   ) {}
 
   async provideInlineCompletionItems(
@@ -29,7 +30,7 @@ export class DeinsCompleteInlineCompletionProvider implements vscode.InlineCompl
     _context: vscode.InlineCompletionContext,
     token: vscode.CancellationToken,
   ): Promise<vscode.InlineCompletionItem[]> {
-    if (this.lifecycle.getState() !== "enabled" || token.isCancellationRequested) {
+    if (this.lifecycle.getState() !== "enabled" || token.isCancellationRequested || !await this.canComplete()) {
       return [];
     }
 

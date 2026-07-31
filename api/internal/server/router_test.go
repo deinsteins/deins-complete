@@ -24,7 +24,7 @@ func (providerErrorProvider) Complete(context.Context, completion.Request) (comp
 
 func testRouter() http.Handler {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	return newRouter(logger, completion.NewService(providers.MockProvider{}), auth.New("", 1, 0), false, false, nil, nil, nil, nil, nil, nil, nil)
+	return newRouter(logger, completion.NewService(providers.MockProvider{}), auth.New("", 1, 0), false, false, nil, nil, nil, nil, nil, nil, nil, false)
 }
 
 func TestHealthAndReady(t *testing.T) {
@@ -100,7 +100,7 @@ func TestMethodNotAllowedReturnsJSON(t *testing.T) {
 
 func TestProviderErrorsUseSafeAPIResponses(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	router := newRouter(logger, completion.NewService(providerErrorProvider{}), auth.New("", 1, 0), false, false, nil, nil, nil, nil, nil, nil, nil)
+	router := newRouter(logger, completion.NewService(providerErrorProvider{}), auth.New("", 1, 0), false, false, nil, nil, nil, nil, nil, nil, nil, false)
 	body := `{"context":{"prefix":"const user =","suffix":"","language":"typescript","filePath":"test.ts","cursorOffset":12}}`
 	response := httptest.NewRecorder()
 	router.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/v1/completions", strings.NewReader(body)))
@@ -120,7 +120,7 @@ func TestOversizedCompletionBody(t *testing.T) {
 func TestAuthenticatedCompletionAndRegistration(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	service := auth.New("01234567890123456789012345678901", 1, 0)
-	router := newRouter(logger, completion.NewService(providers.MockProvider{}), service, true, false, nil, nil, nil, nil, nil, nil, nil)
+	router := newRouter(logger, completion.NewService(providers.MockProvider{}), service, true, false, nil, nil, nil, nil, nil, nil, nil, false)
 	registration := httptest.NewRecorder()
 	router.ServeHTTP(registration, httptest.NewRequest(http.MethodPost, "/v1/installations/register", strings.NewReader(`{"installationId":"installation-1"}`)))
 	if registration.Code != http.StatusOK {
@@ -149,7 +149,7 @@ func TestAuthenticatedCompletionAndRegistration(t *testing.T) {
 
 func TestStreamingCompletionEndpoint(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	router := newRouter(logger, completion.NewService(providers.MockProvider{}), auth.New("", 1, 0), false, true, nil, nil, nil, nil, nil, nil, nil)
+	router := newRouter(logger, completion.NewService(providers.MockProvider{}), auth.New("", 1, 0), false, true, nil, nil, nil, nil, nil, nil, nil, false)
 	body := `{"context":{"prefix":"const user =","suffix":"","language":"typescript","filePath":"test.ts","cursorOffset":12}}`
 	response := httptest.NewRecorder()
 	router.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/v1/completions/stream", strings.NewReader(body)))
