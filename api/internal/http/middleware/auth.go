@@ -18,16 +18,20 @@ func Auth(service *auth.Service) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			h := r.Header.Get("Authorization")
-			if !strings.HasPrefix(h, "Bearer ") {
-				response.WriteError(w, 401, "UNAUTHORIZED", "Authentication required.", GetRequestID(r.Context()))
-				return
+			credentials := []string{r.Header.Get("X-DeinsComplete-Installation-Token")}
+			if strings.HasPrefix(h, "Bearer ") {
+				credentials = append([]string{strings.TrimPrefix(h, "Bearer ")}, credentials...)
 			}
-			id, e := service.Validate(strings.TrimPrefix(h, "Bearer "))
-			if e != nil {
-				response.WriteError(w, 401, "UNAUTHORIZED", "Authentication required.", GetRequestID(r.Context()))
-				return
+			for _, credential := range credentials {
+				if credential == "" {
+					continue
+				}
+				if id, err := service.Validate(credential); err == nil {
+					next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), identityKey{}, Identity{InstallationID: id})))
+					return
+				}
 			}
-			next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), identityKey{}, Identity{InstallationID: id})))
+			response.WriteError(w, 401, "UNAUTHORIZED", "Authentication required.", GetRequestID(r.Context()))
 		})
 	}
 }

@@ -145,6 +145,14 @@ func TestAuthenticatedCompletionAndRegistration(t *testing.T) {
 	if authorized.Code != http.StatusOK {
 		t.Fatalf("authorized completion: %d", authorized.Code)
 	}
+	headerAuthorized := httptest.NewRecorder()
+	headerRequest := httptest.NewRequest(http.MethodPost, "/v1/completions", strings.NewReader(body))
+	headerRequest.Header.Set("Authorization", "Bearer invalid-token")
+	headerRequest.Header.Set("X-DeinsComplete-Installation-Token", payload.Token)
+	router.ServeHTTP(headerAuthorized, headerRequest)
+	if headerAuthorized.Code != http.StatusOK {
+		t.Fatalf("installation-header authorized completion: %d", headerAuthorized.Code)
+	}
 }
 
 func TestStreamingCompletionEndpoint(t *testing.T) {

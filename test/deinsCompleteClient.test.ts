@@ -13,13 +13,18 @@ function response(status: number, payload: unknown, requestId = "request-1"): Re
 
 test("client posts completion request and validates response", async () => {
   let url = "";
+  let headers: Record<string, string> = {};
   const client = new DeinsCompleteClient(settings, async (input, init) => {
     url = input;
+    headers = init?.headers as Record<string, string>;
     assert.equal(init?.method, "POST");
     return response(200, { completion: { text: "await getUser();" }, metadata: { requestId: "request-1" } });
   });
+  client.setInstallationToken("installation-token");
   assert.deepEqual(await client.complete(request, new AbortController().signal), { completion: { text: "await getUser();" }, metadata: { requestId: "request-1" }, requestId: "request-1" });
   assert.equal(url, "http://127.0.0.1:3001/v1/completions");
+  assert.equal(headers.Authorization, "Bearer installation-token");
+  assert.equal(headers["X-DeinsComplete-Installation-Token"], "installation-token");
 });
 
 test("client uses metadata request ID when the response header is absent", async () => {

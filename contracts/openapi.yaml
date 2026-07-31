@@ -108,6 +108,7 @@ paths:
       summary: Request an inline completion.
       security:
         - InstallationBearerAuth: []
+        - InstallationTokenAuth: []
       requestBody:
         required: true
         content:
@@ -134,6 +135,7 @@ paths:
       summary: Request a streaming inline completion.
       security:
         - InstallationBearerAuth: []
+        - InstallationTokenAuth: []
       requestBody:
         required: true
         content:
@@ -450,4 +452,4 @@ components:
       type: apiKey
       in: header
       name: X-DeinsComplete-Installation-Token
-      description: Installation credential, required together with UserBearerAuth only for linking.
+      description: Signed installation credential; accepted for completion endpoints and required together with UserBearerAuth for linking.

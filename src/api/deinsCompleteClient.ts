@@ -237,7 +237,9 @@ export class DeinsCompleteClient implements BackendClient, AccountApiClient {
       throw new BackendUnavailableError("Backend completion is temporarily unavailable.", undefined, 503);
     }
   }
-  private headers(headers: Record<string,string>): Record<string,string> { return this.token ? {...headers,Authorization:`Bearer ${this.token}`} : headers; }
+  private headers(headers: Record<string,string>): Record<string,string> {
+    return this.token ? { ...headers, Authorization: `Bearer ${this.token}`, "X-DeinsComplete-Installation-Token": this.token } : headers;
+  }
 }
 
 function createRequestCancellation(source: AbortSignal | undefined, timeoutMs: number): { signal: AbortSignal; timedOut(): boolean; dispose(): void } {
