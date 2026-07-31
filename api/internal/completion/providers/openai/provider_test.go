@@ -128,7 +128,7 @@ func TestProviderTimeoutAndCancellation(t *testing.T) {
 
 func TestPromptAndBaseURLNormalization(t *testing.T) {
 	messages := BuildMessages(testRequest())
-	if len(messages) != 2 || !strings.Contains(messages[1].Content, "const user =") || !strings.Contains(messages[1].Content, ";") || strings.Contains(messages[1].Content, "test-key") || strings.Contains(messages[1].Content, "/private/path.ts") {
+	if len(messages) != 2 || !strings.Contains(messages[1].Content, "const user =") || !strings.Contains(messages[1].Content, ";") || !strings.Contains(messages[1].Content, "File: path.ts") || strings.Contains(messages[1].Content, "test-key") || strings.Contains(messages[1].Content, "/private/path.ts") {
 		t.Fatal("prompt has incorrect content")
 	}
 	for _, value := range []string{"https://api.example.com/v1", "https://api.example.com/v1/"} {
