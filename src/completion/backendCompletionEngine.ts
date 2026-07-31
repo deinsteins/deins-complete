@@ -27,13 +27,15 @@ export class BackendCompletionEngine implements CompletionEngine {
         return null;
       }
       if (error instanceof UnauthorizedError && this.refreshAuthentication !== undefined && !signal.aborted) {
+        this.logger.debug(`Backend installation authentication rejected${safeErrorDetails(error)}`);
         try {
           await this.refreshAuthentication(signal);
+          if (signal.aborted) return null;
           const response = await this.completeRequest(request, signal);
           return response.completion.text === "" ? null : { text: response.completion.text };
         } catch (refreshError) {
           if (refreshError instanceof CancelledError || signal.aborted) return null;
-          this.logger.debug("Backend authentication refresh failed");
+          this.logger.debug(`Backend authentication refresh failed${safeErrorDetails(refreshError)}`);
           return null;
         }
       }
@@ -65,6 +67,11 @@ export class BackendCompletionEngine implements CompletionEngine {
     }
     return this.client.complete(apiRequest, signal);
   }
+}
+
+function safeErrorDetails(error: unknown): string {
+  if (!(error instanceof ApiError)) return " type=unknown";
+  return ` type=${error.name} status=${error.status ?? "none"} requestId=${error.requestId ?? "none"}`;
 }
 
 export function toApiCompletionRequest(request: CompletionRequest, version: string): ApiCompletionRequest {

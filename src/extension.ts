@@ -65,10 +65,16 @@ export function activate(context: vscode.ExtensionContext): void {
       await installation.ensureRegistered(signal);
       backendClient.setInstallationToken(await installation.getToken());
     };
-    const refreshAuthentication = async (signal: AbortSignal): Promise<void> => {
-      await installation.reset();
-      await authenticate(signal);
-      if (await account.isSignedIn()) await ensureAccountLinked();
+    let authenticationRefresh: Promise<void> | undefined;
+    const refreshAuthentication = async (): Promise<void> => {
+      if (authenticationRefresh === undefined) {
+        authenticationRefresh = (async () => {
+          await installation.reset();
+          await authenticate(new AbortController().signal);
+          if (await account.isSignedIn()) await ensureAccountLinked();
+        })().finally(() => { authenticationRefresh = undefined; });
+      }
+      return authenticationRefresh;
     };
     void authenticate(new AbortController().signal).catch(() => logger.debug("Installation registration deferred"));
     void account.isSignedIn().then((signedIn) => { if (signedIn) void ensureAccountLinked(); });
