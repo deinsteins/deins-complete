@@ -33,6 +33,7 @@ export class DeinsCompleteInlineCompletionProvider implements vscode.InlineCompl
     const snapshot = this.getEditorState(document);
     const request: CompletionRequest = this.contextBuilder.build(document, position);
     const cancellation = bridgeCancellation(token);
+    void this.autoImports.prefetch(document, position);
     request.mode = completionRequestMode(request);
     if (request.mode === "full") request.repositoryContextTask = this.repositoryContextBuilder.build(document, request, cancellation.signal);
     this.logger.debug(`Inline completion requested (language=${request.language}, version=${snapshot.version}, prefixChars=${request.metadata.prefixCharacters}, suffixChars=${request.metadata.suffixCharacters})`);
@@ -52,9 +53,12 @@ export class DeinsCompleteInlineCompletionProvider implements vscode.InlineCompl
       }
 
       this.logger.debug("Inline completion produced result");
-      const command = this.autoImports.canResolve(result.text)
-        ? { command: "deinscomplete.applyAutoImport", title: "Apply verified import", arguments: [document.uri, position, result.text] }
-        : undefined;
+      const prefetchedImport = this.autoImports.getPrefetched(document, position, result.text);
+      const command = prefetchedImport !== undefined
+        ? { command: "deinscomplete.applyPrefetchedAutoImport", title: "Apply verified import", arguments: [prefetchedImport] }
+        : this.autoImports.canResolve(result.text)
+          ? { command: "deinscomplete.applyAutoImport", title: "Apply verified import", arguments: [document.uri, position, result.text] }
+          : undefined;
       return [new vscode.InlineCompletionItem(result.text, new vscode.Range(position, position), command)];
     } catch (error) {
       this.logger.error("Inline completion failed", error);
