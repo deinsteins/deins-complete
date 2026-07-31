@@ -1,4 +1,5 @@
 node_modules/
+graphify-out/
 out/
 *.vsix
 .vscode-test/

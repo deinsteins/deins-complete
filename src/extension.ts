@@ -27,8 +27,8 @@ export function activate(context: vscode.ExtensionContext): void {
     const lifecycle = new DeinsCompleteLifecycle(config);
     const statusBar = new DeinsCompleteStatusBar();
     const extensionVersion = String(context.extension.packageJSON.version);
-    const backendClient = new DeinsCompleteClient(config, globalThis.fetch, logger, extensionVersion);
     const credentials = new CredentialStore(context.secrets);
+    const backendClient = new DeinsCompleteClient(config, globalThis.fetch, logger, extensionVersion, () => credentials.getInstallationToken());
     const installation = new InstallationService(() => getInstallationId(context.globalState), credentials, backendClient);
     const account = new AccountService(backendClient, credentials);
     let accountNoticeShown = false;
@@ -63,7 +63,6 @@ export function activate(context: vscode.ExtensionContext): void {
     };
     const authenticate = async (signal: AbortSignal): Promise<void> => {
       await installation.ensureRegistered(signal);
-      backendClient.setInstallationToken(await installation.getToken());
     };
     let authenticationRefresh: Promise<void> | undefined;
     const refreshAuthentication = async (): Promise<void> => {
@@ -118,7 +117,7 @@ export function activate(context: vscode.ExtensionContext): void {
       vscode.languages.registerInlineCompletionItemProvider([{ scheme: "file" }, { scheme: "vscode-remote" }], completionProvider),
       ...registerCommands(config, lifecycle, logger, backendClient, requests, installation, repositoryContext, engine, feedback, autoImports, account, refreshAccountStatus, () => authenticate(new AbortController().signal)),
     );
-    logger.info("DeinsComplete activated.");
+    logger.info(`DeinsComplete activated version=${extensionVersion} backend=${safeBackendOrigin(config.getBackendUrl())}`);
   } catch (error) {
     logger.error("DeinsComplete failed to initialize", error);
     void vscode.window.showErrorMessage("DeinsComplete failed to initialize. See Output → DeinsComplete.");
@@ -127,4 +126,8 @@ export function activate(context: vscode.ExtensionContext): void {
 
 export function deactivate(): void {
   // All extension resources are owned by context.subscriptions.
+}
+
+function safeBackendOrigin(value: string): string {
+  try { return new URL(value).origin; } catch { return "invalid"; }
 }

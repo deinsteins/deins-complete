@@ -5,3 +5,4 @@ test/**
 tsconfig.json
 .eslintrc.json
 node_modules/**
+graphify-out/**

@@ -19,12 +19,24 @@ test("client posts completion request and validates response", async () => {
     headers = init?.headers as Record<string, string>;
     assert.equal(init?.method, "POST");
     return response(200, { completion: { text: "await getUser();" }, metadata: { requestId: "request-1" } });
-  });
-  client.setInstallationToken("installation-token");
+  }, undefined, "0.0.1", async () => "installation-token");
   assert.deepEqual(await client.complete(request, new AbortController().signal), { completion: { text: "await getUser();" }, metadata: { requestId: "request-1" }, requestId: "request-1" });
   assert.equal(url, "http://127.0.0.1:3001/v1/completions");
   assert.equal(headers.Authorization, "Bearer installation-token");
   assert.equal(headers["X-DeinsComplete-Installation-Token"], "installation-token");
+});
+
+test("client reads the authoritative installation token for every completion", async () => {
+  let token = "first-token";
+  const seen: string[] = [];
+  const client = new DeinsCompleteClient(settings, async (_input, init) => {
+    seen.push((init?.headers as Record<string, string>).Authorization);
+    return response(200, { completion: { text: "ok" } });
+  }, undefined, "0.0.1", async () => token);
+  await client.complete(request, new AbortController().signal);
+  token = "renewed-token";
+  await client.complete(request, new AbortController().signal);
+  assert.deepEqual(seen, ["Bearer first-token", "Bearer renewed-token"]);
 });
 
 test("client uses metadata request ID when the response header is absent", async () => {

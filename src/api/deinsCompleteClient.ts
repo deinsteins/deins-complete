@@ -57,6 +57,7 @@ export class DeinsCompleteClient implements BackendClient, AccountApiClient {
     private readonly fetchFunction: FetchFunction = globalThis.fetch,
     private readonly logger?: ApiLogger,
     private readonly clientVersion = "0.0.0",
+    private readonly installationTokenProvider?: () => PromiseLike<string | undefined>,
   ) {}
 
   async complete(request: ApiCompletionRequest, signal: AbortSignal): Promise<ApiCompletionResponse> {
@@ -64,7 +65,7 @@ export class DeinsCompleteClient implements BackendClient, AccountApiClient {
     const startedAt = Date.now();
     const response = await this.send("/v1/completions", {
       method: "POST",
-      headers: this.headers({ "Content-Type": "application/json", Accept: "application/json" }),
+      headers: await this.headers({ "Content-Type": "application/json", Accept: "application/json" }),
       body: JSON.stringify(request),
     }, signal);
     const payload = await this.parseCompletionResponse(response);
@@ -73,7 +74,7 @@ export class DeinsCompleteClient implements BackendClient, AccountApiClient {
   }
   async streamComplete(request: ApiCompletionRequest, signal: AbortSignal): Promise<ApiCompletionResponse> {
     this.ensureAvailable();
-    const response = await this.send("/v1/completions/stream", { method: "POST", headers: this.headers({ "Content-Type": "application/json", Accept: "text/event-stream" }), body: JSON.stringify(request) }, signal);
+    const response = await this.send("/v1/completions/stream", { method: "POST", headers: await this.headers({ "Content-Type": "application/json", Accept: "text/event-stream" }), body: JSON.stringify(request) }, signal);
     if (response.body === null) throw new InvalidResponseError("Backend stream is unavailable.", this.requestId(response));
     const startedAt = performance.now(); const reader = response.body.getReader(); const decoder = new TextDecoder(); let buffer = ""; let text = ""; let requestId = this.requestId(response); let firstChunkMs: number | undefined;
     for (;;) {
@@ -237,8 +238,9 @@ export class DeinsCompleteClient implements BackendClient, AccountApiClient {
       throw new BackendUnavailableError("Backend completion is temporarily unavailable.", undefined, 503);
     }
   }
-  private headers(headers: Record<string,string>): Record<string,string> {
-    return this.token ? { ...headers, Authorization: `Bearer ${this.token}`, "X-DeinsComplete-Installation-Token": this.token } : headers;
+  private async headers(headers: Record<string,string>): Promise<Record<string,string>> {
+    const token = this.installationTokenProvider === undefined ? this.token : await this.installationTokenProvider();
+    return token ? { ...headers, Authorization: `Bearer ${token}`, "X-DeinsComplete-Installation-Token": token } : headers;
   }
 }
 
