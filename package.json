@@ -163,7 +163,8 @@
     "test": "npm run compile && node scripts/run-tests.js",
     "package": "vsce package --allow-missing-repository",
     "package:vsix": "npm run package",
-    "release:validate": "node scripts/validate-release.js"
+    "release:validate": "node scripts/validate-release.js",
+    "evaluate:provider": "node scripts/evaluate-provider.js"
   },
   "devDependencies": {
     "@types/node": "^20.12.0",
