@@ -1,0 +1,6 @@
+DROP TABLE IF EXISTS invites;
+DROP TABLE IF EXISTS user_sessions;
+DROP TABLE IF EXISTS installations;
+DROP TABLE IF EXISTS user_entitlements;
+DROP TABLE IF EXISTS plans;
+DROP TABLE IF EXISTS users;
