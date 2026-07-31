@@ -56,7 +56,7 @@ export function activate(context: vscode.ExtensionContext): void {
     const repositoryContext = new RepositoryContextBuilder(config);
     const feedback = new FeedbackService();
     const autoImports = new AutoImportResolver();
-    const completionProvider = new DeinsCompleteInlineCompletionProvider(lifecycle, new ContextBuilder(config, undefined, getSafeFilePath), repositoryContext, requests, logger, autoImports);
+    const completionProvider = new DeinsCompleteInlineCompletionProvider(lifecycle, new ContextBuilder(config, undefined, getSafeFilePath), repositoryContext, requests, logger, autoImports, feedback);
     statusBar.update(lifecycle.getState());
     if (!context.globalState.get<boolean>("deinscomplete.onboarding.seen")) {
       void context.globalState.update("deinscomplete.onboarding.seen", true);

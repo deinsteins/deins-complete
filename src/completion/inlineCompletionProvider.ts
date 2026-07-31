@@ -9,6 +9,8 @@ import { CompletionRequest } from "./completionTypes";
 import { completionRequestMode } from "./contextComplexity";
 import { EditorStateSnapshot, isCurrentEditorState } from "./editorState";
 import { AutoImportResolver } from "./autoImportResolver";
+import { FeedbackService } from "../feedback/feedbackService";
+import { completionFocus } from "./contextComplexity";
 
 export class DeinsCompleteInlineCompletionProvider implements vscode.InlineCompletionItemProvider {
   constructor(
@@ -18,6 +20,7 @@ export class DeinsCompleteInlineCompletionProvider implements vscode.InlineCompl
     private readonly requests: RequestManager,
     private readonly logger: Logger,
     private readonly autoImports: AutoImportResolver,
+    private readonly feedback: FeedbackService,
   ) {}
 
   async provideInlineCompletionItems(
@@ -53,12 +56,14 @@ export class DeinsCompleteInlineCompletionProvider implements vscode.InlineCompl
       }
 
       this.logger.debug("Inline completion produced result");
+      const focus = completionFocus(request);
+      this.feedback.recordShown(focus);
       const prefetchedImport = this.autoImports.getPrefetched(document, position, result.text);
-      const command = prefetchedImport !== undefined
-        ? { command: "deinscomplete.applyPrefetchedAutoImport", title: "Apply verified import", arguments: [prefetchedImport] }
-        : this.autoImports.canResolve(result.text)
-          ? { command: "deinscomplete.applyAutoImport", title: "Apply verified import", arguments: [document.uri, position, result.text] }
-          : undefined;
+      const command = {
+        command: "deinscomplete.completionAccepted",
+        title: "Record completion acceptance",
+        arguments: [focus, prefetchedImport, document.uri, position, this.autoImports.canResolve(result.text) ? result.text : undefined],
+      };
       return [new vscode.InlineCompletionItem(result.text, new vscode.Range(position, position), command)];
     } catch (error) {
       this.logger.error("Inline completion failed", error);
