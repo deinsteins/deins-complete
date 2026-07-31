@@ -17,10 +17,39 @@ jobs:
   backend:
     runs-on: ubuntu-latest
     defaults: { run: { working-directory: api } }
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: deinscomplete
+          POSTGRES_USER: deinscomplete
+          POSTGRES_PASSWORD: deinscomplete
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U deinscomplete -d deinscomplete"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 20
+      redis:
+        image: redis:7-alpine
+        ports: ['6379:6379']
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 20
+    env:
+      DATABASE_ENABLED: 'true'
+      DATABASE_URL: postgres://deinscomplete:deinscomplete@localhost:5432/deinscomplete?sslmode=disable
+      ACCOUNT_ACCESS_TOKEN_SECRET: ci-account-access-token-secret-must-be-at-least-32-bytes
+      REDIS_ENABLED: 'true'
+      REDIS_ADDR: localhost:6379
+      REDIS_TLS_ENABLED: 'false'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with: { go-version: '1.22.x' }
+      - run: go run ./cmd/migrate up
       - run: test -z "$(gofmt -l .)"
       - run: go vet ./...
       - run: go test ./...

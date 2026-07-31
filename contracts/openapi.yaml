@@ -3,21 +3,94 @@ info:
   title: DeinsComplete API
   version: 0.1.0
   description: Provider-agnostic inline completion gateway. JSON request bodies are strict; unknown fields are rejected.
+servers:
+  - url: https://api.deinscomplete.web.id
 paths:
   /:
     get:
+      summary: Get API identity.
+      security: []
       responses:
         '200': { description: API identity response }
   /health:
     get:
+      summary: Get process health.
+      security: []
       responses:
         '200': { description: Process is alive }
   /ready:
     get:
+      summary: Get dependency readiness.
+      security: []
       responses:
         '200': { description: Process is ready }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+  /v1/auth/magic/request:
+    post:
+      summary: Request a one-time magic code for account authentication.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MagicCodeRequest' }
+      responses:
+        '202': { description: Request accepted. The response is deliberately identical for eligible and ineligible email addresses. }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+  /v1/auth/magic/verify:
+    post:
+      summary: Exchange a one-time magic code for an account session.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MagicCodeVerifyRequest' }
+      responses:
+        '200':
+          description: Account session created.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AccountSessionResponse' }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+  /v1/auth/refresh:
+    post:
+      summary: Rotate a refresh token and issue a new account session.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RefreshRequest' }
+      responses:
+        '200':
+          description: Account session rotated.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AccountSessionResponse' }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+  /v1/auth/logout:
+    post:
+      summary: Revoke the refresh-token session.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RefreshRequest' }
+      responses:
+        '204': { description: Session revoked. }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
   /v1/installations/register:
     post:
+      summary: Register an anonymous installation.
+      security: []
       requestBody:
         required: true
         content:
@@ -32,8 +105,9 @@ paths:
         '400': { $ref: '#/components/responses/InvalidRequest' }
   /v1/completions:
     post:
+      summary: Request an inline completion.
       security:
-        - BearerAuth: []
+        - InstallationBearerAuth: []
       requestBody:
         required: true
         content:
@@ -49,19 +123,17 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
         '405': { $ref: '#/components/responses/MethodNotAllowed' }
         '413': { $ref: '#/components/responses/InvalidRequest' }
-        '429':
-          description: Completion rate limit or daily quota exceeded. `error.code` is `RATE_LIMITED` or `QUOTA_EXCEEDED`.
-          headers:
-            Retry-After: { schema: { type: integer, minimum: 1 }, description: Seconds until a retry may be attempted. }
-          content: { application/json: { schema: { $ref: '#/components/schemas/ApiErrorResponse' } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '429': { $ref: '#/components/responses/CompletionLimited' }
         '500': { $ref: '#/components/responses/InternalError' }
         '502': { $ref: '#/components/responses/ProviderUnavailable' }
         '503': { $ref: '#/components/responses/ProviderUnavailable' }
         '504': { $ref: '#/components/responses/ProviderTimeout' }
   /v1/completions/stream:
     post:
+      summary: Request a streaming inline completion.
       security:
-        - BearerAuth: []
+        - InstallationBearerAuth: []
       requestBody:
         required: true
         content:
@@ -74,10 +146,152 @@ paths:
             text/event-stream:
               schema: { type: string }
         '400': { $ref: '#/components/responses/InvalidRequest' }
-        '401': { $ref: '#/components/responses/InvalidRequest' }
-        '429': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '429': { $ref: '#/components/responses/CompletionLimited' }
+  /v1/installations/link:
+    post:
+      summary: Link the authenticated installation to the authenticated account.
+      description: Both credentials are required to prove control. An installation already owned by a different account cannot be moved through this endpoint.
+      security:
+        - UserBearerAuth: []
+          InstallationTokenAuth: []
+      responses:
+        '200':
+          description: Installation linked, or already linked to this account.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/InstallationSummary' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+  /v1/account:
+    get:
+      summary: Get the current account.
+      security:
+        - UserBearerAuth: []
+      responses:
+        '200':
+          description: Current account and active plan.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AccountResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /v1/account/entitlements:
+    get:
+      summary: Get plan capabilities and monthly usage.
+      security:
+        - UserBearerAuth: []
+      responses:
+        '200':
+          description: Current plan capabilities and calendar-month usage.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EntitlementsResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+  /v1/account/installations:
+    get:
+      summary: List installations owned by the current account.
+      security:
+        - UserBearerAuth: []
+      responses:
+        '200':
+          description: Installations owned by the current account. Credentials are never returned.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/InstallationSummary' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /v1/account/installations/{id}:
+    delete:
+      summary: Revoke an account installation.
+      security:
+        - UserBearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '204': { description: Installation revoked. }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
 components:
   schemas:
+    MagicCodeRequest:
+      type: object
+      required: [email]
+      properties:
+        email: { type: string, format: email, maxLength: 320 }
+        inviteCode: { type: string, minLength: 1, maxLength: 256, description: Required only when registration mode is invite. }
+    MagicCodeVerifyRequest:
+      type: object
+      required: [email, code]
+      properties:
+        email: { type: string, format: email, maxLength: 320 }
+        code: { type: string, minLength: 6, maxLength: 256, description: "One-time, short-lived magic code." }
+    RefreshRequest:
+      type: object
+      required: [refreshToken]
+      properties:
+        refreshToken: { type: string, minLength: 1, description: Long-lived opaque credential; never log or persist outside secure storage. }
+    AccountSessionResponse:
+      type: object
+      required: [accessToken, refreshToken, expiresIn]
+      properties:
+        accessToken: { type: string, description: Short-lived account bearer token. }
+        refreshToken: { type: string, description: Rotated opaque refresh credential. }
+        expiresIn: { type: integer, minimum: 1, description: Access-token lifetime in seconds. }
+    User:
+      type: object
+      required: [id, email]
+      properties:
+        id: { type: string, format: uuid }
+        email: { type: string, format: email }
+        displayName: { type: string, maxLength: 200 }
+    Plan:
+      type: object
+      required: [code]
+      properties:
+        code: { type: string, enum: [free, pro] }
+    AccountResponse:
+      type: object
+      required: [user, plan]
+      properties:
+        user: { $ref: '#/components/schemas/User' }
+        plan: { $ref: '#/components/schemas/Plan' }
+    EntitlementFeatures:
+      type: object
+      required: [repositoryContext, streaming, premiumRouting]
+      properties:
+        repositoryContext: { type: boolean }
+        streaming: { type: boolean }
+        premiumRouting: { type: boolean }
+    EntitlementLimits:
+      type: object
+      required: [monthlyCompletions, used, remaining]
+      properties:
+        monthlyCompletions: { type: integer, minimum: 0 }
+        used: { type: integer, minimum: 0 }
+        remaining: { type: integer, minimum: 0 }
+    EntitlementsResponse:
+      type: object
+      required: [plan, features, limits]
+      properties:
+        plan: { type: string, enum: [free, pro] }
+        features: { $ref: '#/components/schemas/EntitlementFeatures' }
+        limits: { $ref: '#/components/schemas/EntitlementLimits' }
+    InstallationSummary:
+      type: object
+      required: [id, status, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        status: { type: string, enum: [active, revoked, blocked] }
+        createdAt: { type: string, format: date-time }
+        lastSeenAt: { type: string, format: date-time, nullable: true }
     InstallationIdentity:
       type: object
       required: [id]
@@ -103,7 +317,7 @@ components:
         suffix: { type: string, maxLength: 25000 }
         language: { type: string, minLength: 1, maxLength: 100 }
         filePath: { type: string, maxLength: 4096, description: Workspace-relative path or filename only; never an absolute machine-local path. }
-        cursorOffset: { type: integer, minimum: 0, description: Original document offset, not a context-relative offset. }
+        cursorOffset: { type: integer, minimum: 0, description: "Original document offset, not a context-relative offset." }
     RepositoryContextFile:
       type: object
       required: [path, language, content, reason]
@@ -200,7 +414,40 @@ components:
     ProviderTimeout:
       description: Completion provider timed out
       content: { application/json: { schema: { $ref: '#/components/schemas/ApiErrorResponse' } } }
+    Unauthorized:
+      description: Authentication failed or credentials are expired/revoked.
+      content: { application/json: { schema: { $ref: '#/components/schemas/ApiErrorResponse' } } }
+    Forbidden:
+      description: Authenticated principal is not authorized for this operation.
+      content: { application/json: { schema: { $ref: '#/components/schemas/ApiErrorResponse' } } }
+    Conflict:
+      description: Request conflicts with durable account state.
+      content: { application/json: { schema: { $ref: '#/components/schemas/ApiErrorResponse' } } }
+    ServiceUnavailable:
+      description: A required dependency is unavailable.
+      content: { application/json: { schema: { $ref: '#/components/schemas/ApiErrorResponse' } } }
+    RateLimited:
+      description: Request rate limit exceeded.
+      headers:
+        Retry-After: { schema: { type: integer, minimum: 1 }, description: Seconds until a retry may be attempted. }
+      content: { application/json: { schema: { $ref: '#/components/schemas/ApiErrorResponse' } } }
+    CompletionLimited:
+      description: Completion rate limit, abuse quota, or plan quota exceeded. `error.code` is `RATE_LIMITED`, `QUOTA_EXCEEDED`, or `PLAN_QUOTA_EXCEEDED`.
+      headers:
+        Retry-After: { schema: { type: integer, minimum: 1 }, description: Seconds until a retry may be attempted. }
+      content: { application/json: { schema: { $ref: '#/components/schemas/ApiErrorResponse' } } }
   securitySchemes:
-    BearerAuth:
+    InstallationBearerAuth:
       type: http
       scheme: bearer
+      description: Signed installation credential used for completion endpoints.
+    UserBearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Short-lived DeinsComplete account access token.
+    InstallationTokenAuth:
+      type: apiKey
+      in: header
+      name: X-DeinsComplete-Installation-Token
+      description: Installation credential, required together with UserBearerAuth only for linking.

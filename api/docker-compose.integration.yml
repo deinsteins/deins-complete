@@ -1,9 +1,26 @@
 services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: deinscomplete
+      POSTGRES_USER: deinscomplete
+      POSTGRES_PASSWORD: deinscomplete
+    ports: ["127.0.0.1:5432:5432"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U deinscomplete -d deinscomplete"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+    networks: [deinscomplete-integration]
   redis:
     image: redis:7-alpine
-    profiles: [self-hosted-redis]
-    command: ["redis-server", "--appendonly", "yes"]
-    volumes: [redis_data:/data]
-    networks: [deinscomplete]
-volumes:
-  redis_data:
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    ports: ["127.0.0.1:6379:6379"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+    networks: [deinscomplete-integration]
+networks:
+  deinscomplete-integration:

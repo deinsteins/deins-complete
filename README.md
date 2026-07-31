@@ -13,7 +13,7 @@ DeinsComplete suggests code directly at your cursor as ghost text. Press `Tab` t
 3. Open the Command Palette (`Ctrl+Shift+P`) and run **DeinsComplete: Check Backend**.
 4. Start typing code. When a suggestion appears, press `Tab` to accept it.
 
-The extension connects to the managed DeinsComplete backend automatically. You do not need to configure an AI provider, model, API key, or provider URL.
+The extension connects to the managed DeinsComplete backend automatically. You do not need to configure an AI provider, model, API key, or provider URL. An account is optional: completions work as anonymous Free access on first run, while signing in links the installation for shared plan usage across devices.
 
 ## Try it
 
@@ -47,6 +47,9 @@ Use **DeinsComplete: Disable** or **DeinsComplete: Enable** to control inline su
 | `DeinsComplete: Enable` / `Disable` | Turns inline completion on or off. |
 | `DeinsComplete: Clear Completion Cache` | Clears in-memory suggestions. |
 | `DeinsComplete: Reset Authentication` | Requests a fresh installation credential on the next request. |
+| `DeinsComplete: Sign In` | Starts optional account sign-in and links this installation. |
+| `DeinsComplete: Sign Out` | Removes locally stored account credentials; the installation credential remains. |
+| `DeinsComplete: Account Status` | Shows account plan and current monthly usage without exposing credentials. |
 
 ## Troubleshooting
 
