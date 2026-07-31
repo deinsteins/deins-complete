@@ -87,3 +87,22 @@ test("API request mapping uses smaller member-access context budgets", () => {
   const mapped = toApiCompletionRequest(large, "0.0.1");
   assert.equal(mapped.context.prefix.length, 1500); assert.equal(mapped.context.suffix.length, 500); assert.equal(mapped.repositoryContext?.files[0].content.length, 2000);
 });
+
+test("API request mapping adapts fast and timed-out context budgets", () => {
+  const fast = toApiCompletionRequest({ ...request, mode: "fast", prefix: "p".repeat(5000), suffix: "s".repeat(3000) }, "0.0.1");
+  assert.equal(fast.context.prefix.length, 1800);
+  assert.equal(fast.context.suffix.length, 700);
+
+  const timedOut = toApiCompletionRequest({
+    ...request,
+    mode: "full",
+    repositoryContext: {
+      files: [{ path: "a.ts", language: "ts", content: "r".repeat(5000), reason: "import" }],
+      focus: "component-props",
+      fingerprint: "x",
+      durationMs: 40,
+      timedOut: true,
+    },
+  }, "0.0.1");
+  assert.equal(timedOut.repositoryContext?.files[0].content.length, 2000);
+});

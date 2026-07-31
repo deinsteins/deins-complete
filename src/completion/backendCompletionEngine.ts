@@ -64,7 +64,7 @@ export class BackendCompletionEngine implements CompletionEngine {
 }
 
 export function toApiCompletionRequest(request: CompletionRequest, version: string): ApiCompletionRequest {
-  const limits = contextLimits(request.repositoryContext?.focus);
+  const limits = contextLimits(request.repositoryContext?.focus, request.mode, request.repositoryContext?.timedOut === true);
   const apiRequest: ApiCompletionRequest = {
     context: {
       prefix: request.prefix.slice(-limits.prefix),
@@ -93,12 +93,15 @@ export function toApiCompletionRequest(request: CompletionRequest, version: stri
   return apiRequest;
 }
 
-function contextLimits(focus?: string): { prefix: number; suffix: number; repository: number } {
+function contextLimits(focus?: string, mode?: string, repositoryTimedOut = false): { prefix: number; suffix: number; repository: number } {
+  if (mode === "fast") return { prefix: 1800, suffix: 700, repository: 0 };
+  let limits: { prefix: number; suffix: number; repository: number };
   switch (focus) {
-    case "member-access": return { prefix: 1500, suffix: 500, repository: 2000 };
-    case "component-props": return { prefix: 2500, suffix: 1000, repository: 4000 };
-    case "function-arguments": return { prefix: 2500, suffix: 1000, repository: 4000 };
-    case "tailwind-class": return { prefix: 2000, suffix: 500, repository: 3000 };
-    default: return { prefix: 4000, suffix: 2000, repository: 8000 };
+    case "member-access": limits = { prefix: 1500, suffix: 500, repository: 2000 }; break;
+    case "component-props": limits = { prefix: 2500, suffix: 1000, repository: 4000 }; break;
+    case "function-arguments": limits = { prefix: 2500, suffix: 1000, repository: 4000 }; break;
+    case "tailwind-class": limits = { prefix: 2000, suffix: 500, repository: 3000 }; break;
+    default: limits = { prefix: 4000, suffix: 2000, repository: 8000 };
   }
+  return repositoryTimedOut ? { ...limits, repository: Math.floor(limits.repository / 2) } : limits;
 }
