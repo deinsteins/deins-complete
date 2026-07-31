@@ -6,6 +6,28 @@ On the server, retain the existing `/app/deinscomplete/.env`; CI never copies or
 
 Required GitHub Actions secrets: `EC2_HOST`, `EC2_USER`, `EC2_SSH_PRIVATE_KEY_BASE64`, and trusted `EC2_KNOWN_HOSTS`. Create the base64 value locally with `base64 -w 0 ~/.ssh/<deployment-private-key>` (macOS: `base64 < ~/.ssh/<deployment-private-key> | tr -d '\n'`). Provider credentials, auth secrets, email sender credentials, and `DATABASE_URL` remain only in the EC2 `.env`. For private GHCR images, authenticate Docker on EC2 once with a token that has package read access.
 
+## PostgreSQL accounts database (single-EC2 beta)
+
+`docker-compose.prod.yml` includes an internal `postgres:17-alpine` service and persistent `postgres_data` volume. PostgreSQL has no public host port; only the API reaches it through the `deinscomplete` Docker network. Before enabling accounts, add these values to `/app/deinscomplete/.env` (never commit it):
+
+```env
+POSTGRES_DB=deinscomplete
+POSTGRES_USER=deinscomplete
+POSTGRES_PASSWORD=<openssl rand -hex 32>
+DATABASE_ENABLED=true
+DATABASE_URL=postgres://deinscomplete:<same-password>@postgres:5432/deinscomplete?sslmode=disable
+```
+
+Use a hexadecimal password so it needs no URL escaping. After pulling the account-enabled API image, start the database, run the additive migration once, then start the API:
+
+```bash
+docker compose -f docker-compose.prod.yml up -d postgres redis
+docker compose -f docker-compose.prod.yml --profile maintenance run --rm migrate
+docker compose -f docker-compose.prod.yml up -d api caddy
+```
+
+`postgres_data` is the account database. Back it up before schema changes; do not use `docker compose down -v` in production.
+
 Deploy an immutable image:
 
 ```bash

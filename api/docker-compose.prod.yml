@@ -12,6 +12,8 @@ services:
     depends_on:
       redis:
         condition: service_healthy
+      postgres:
+        condition: service_healthy
   redis:
     image: redis:7-alpine
     restart: unless-stopped
@@ -28,6 +30,39 @@ services:
     security_opt:
       - no-new-privileges:true
     networks: [deinscomplete]
+  # Persistent account database. It is intentionally internal-only: no host port.
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-deinscomplete}
+      POSTGRES_USER: ${POSTGRES_USER:-deinscomplete}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+    expose: ["5432"]
+    volumes: [postgres_data:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+    security_opt:
+      - no-new-privileges:true
+    networks: [deinscomplete]
+  # Run explicitly after an image update: docker compose --profile maintenance run --rm migrate
+  migrate:
+    image: ${DEINSCOMPLETE_API_IMAGE:?set DEINSCOMPLETE_API_IMAGE in the deployment environment}
+    env_file: .env
+    command: ["/deinscomplete-migrate", "up"]
+    profiles: ["maintenance"]
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    tmpfs: ["/tmp"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks: [deinscomplete]
   caddy:
     image: caddy:2-alpine
     restart: unless-stopped
@@ -43,3 +78,4 @@ volumes:
   caddy_data:
   caddy_config:
   redis_data:
+  postgres_data:
