@@ -37,17 +37,19 @@ test("account service stores only account tokens in SecretStorage and links afte
 });
 
 test("account requirement is discovered once and cached", async () => {
-  let calls = 0; const api = client(); api.getAccountRequirement = async () => { calls++; return true; };
+  let calls = 0; const api = client(); api.getAccountRequirement = async () => { calls++; await new Promise((resolve) => setTimeout(resolve, 5)); return true; };
   const service = new AccountService(api, credentials());
-  assert.equal(await service.isRequired(), true); assert.equal(await service.isRequired(), true); assert.equal(calls, 1);
+  assert.deepEqual(await Promise.all([service.isRequired(), service.isRequired(), service.isRequired()]), [true, true, true]);
+  assert.equal(await service.isRequired(), true); assert.equal(calls, 1);
 });
 
 test("account service links a persisted sign-in only once per activation", async () => {
   let links = 0; const api = client(); api.linkInstallation = async () => { links++; };
   const store = credentials(); await store.setAccountTokens("access", "refresh");
   const service = new AccountService(api, store);
-  await service.ensureLinked("installation"); await service.ensureLinked("installation");
-  assert.equal(links, 1);
+  await service.ensureLinked("installation-1"); await service.ensureLinked("installation-1");
+  await service.ensureLinked("installation-2");
+  assert.equal(links, 2);
 });
 
 test("account status resolves account, entitlements, and installations", async () => {

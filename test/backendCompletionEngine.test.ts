@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { CancelledError, EndpointNotFoundError, NetworkError } from "../src/api/apiErrors";
+import { AccountRequiredError, CancelledError, EndpointNotFoundError, NetworkError } from "../src/api/apiErrors";
 import { ApiCompletionResponse } from "../src/api/apiTypes";
 import { BackendClient } from "../src/api/deinsCompleteClient";
 import { BackendCompletionEngine, toApiCompletionRequest } from "../src/completion/backendCompletionEngine";
@@ -51,6 +51,19 @@ test("backend completion engine handles backend and cancellation errors silently
   const cancelled = new BackendCompletionEngine(new TestClient(new CancelledError("cancelled")), "0.0.1", logger);
   assert.equal(await offline.complete(request, new AbortController().signal), null);
   assert.equal(await cancelled.complete(request, new AbortController().signal), null);
+});
+
+test("account-required response does not reset installation authentication", async () => {
+  let refreshes = 0;
+  const engine = new BackendCompletionEngine(
+    new TestClient(new AccountRequiredError("sign in required")),
+    "0.0.1",
+    logger,
+    undefined,
+    async () => { refreshes++; },
+  );
+  assert.equal(await engine.complete(request, new AbortController().signal), null);
+  assert.equal(refreshes, 0);
 });
 
 test("API request mapping sends only contract fields and a safe path", () => {

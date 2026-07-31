@@ -1,4 +1,4 @@
-import { ApiError, CancelledError, EndpointNotFoundError, QuotaExceededError, RateLimitError, TimeoutError, UnauthorizedError } from "../api/apiErrors";
+import { AccountRequiredError, ApiError, CancelledError, EndpointNotFoundError, QuotaExceededError, RateLimitError, TimeoutError, UnauthorizedError } from "../api/apiErrors";
 import { ApiCompletionRequest, ApiLogger } from "../api/apiTypes";
 import { BackendClient } from "../api/deinsCompleteClient";
 import { CompletionEngine } from "./completionEngine";
@@ -22,6 +22,10 @@ export class BackendCompletionEngine implements CompletionEngine {
       const response = await this.completeRequest(request, signal);
       return response.completion.text === "" ? null : { text: response.completion.text };
     } catch (error) {
+      if (error instanceof AccountRequiredError) {
+        this.logger.debug("Backend account sign-in required");
+        return null;
+      }
       if (error instanceof UnauthorizedError && this.refreshAuthentication !== undefined && !signal.aborted) {
         try {
           await this.refreshAuthentication(signal);

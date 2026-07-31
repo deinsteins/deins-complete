@@ -24,6 +24,7 @@ export function registerCommands(
   autoImports: AutoImportResolver,
   account: AccountService,
   refreshAccountStatus: () => Promise<void>,
+  syncInstallationAuthentication: () => Promise<void>,
 ): vscode.Disposable[] {
   return [
     vscode.commands.registerCommand("deinscomplete.enable", async () => {
@@ -53,8 +54,9 @@ export function registerCommands(
     }),
     vscode.commands.registerCommand("deinscomplete.resetAuthentication", async () => {
       await installation.reset();
+      await syncInstallationAuthentication();
       logger.info("Installation authentication reset.");
-      void vscode.window.showInformationMessage("DeinsComplete authentication reset. It will be renewed when needed.");
+      void vscode.window.showInformationMessage("DeinsComplete authentication reset and renewed.");
     }),
     vscode.commands.registerCommand("deinscomplete.signIn", async () => {
       const email = await vscode.window.showInputBox({ prompt: "DeinsComplete account email", placeHolder: "you@example.com", ignoreFocusOut: true, validateInput: (value) => value.trim().includes("@") ? undefined : "Enter a valid email address." });
@@ -67,6 +69,7 @@ export function registerCommands(
         const code = await vscode.window.showInputBox({ prompt: "Enter the code sent to your email", ignoreFocusOut: true, password: true, validateInput: (value) => value.trim() === "" ? "Enter the sign-in code." : undefined });
         if (code === undefined) return;
         await account.verifyMagicCode(email.trim(), code.trim(), await installation.getToken());
+        await syncInstallationAuthentication();
         await refreshAccountStatus();
         logger.info("Account sign-in completed.");
         void vscode.window.showInformationMessage("Signed in to DeinsComplete. This installation is linked to your account.");

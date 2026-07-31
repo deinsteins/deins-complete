@@ -68,6 +68,7 @@ export function activate(context: vscode.ExtensionContext): void {
     const refreshAuthentication = async (signal: AbortSignal): Promise<void> => {
       await installation.reset();
       await authenticate(signal);
+      if (await account.isSignedIn()) await ensureAccountLinked();
     };
     void authenticate(new AbortController().signal).catch(() => logger.debug("Installation registration deferred"));
     void account.isSignedIn().then((signedIn) => { if (signedIn) void ensureAccountLinked(); });
@@ -109,7 +110,7 @@ export function activate(context: vscode.ExtensionContext): void {
       vscode.window.onDidChangeActiveTextEditor((editor) => { if (editor !== undefined) repositoryContext.record(editor.document); }),
       // Remote WSL/SSH workspaces use vscode-remote rather than file URIs.
       vscode.languages.registerInlineCompletionItemProvider([{ scheme: "file" }, { scheme: "vscode-remote" }], completionProvider),
-      ...registerCommands(config, lifecycle, logger, backendClient, requests, installation, repositoryContext, engine, feedback, autoImports, account, refreshAccountStatus),
+      ...registerCommands(config, lifecycle, logger, backendClient, requests, installation, repositoryContext, engine, feedback, autoImports, account, refreshAccountStatus, () => authenticate(new AbortController().signal)),
     );
     logger.info("DeinsComplete activated.");
   } catch (error) {
