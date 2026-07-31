@@ -41,11 +41,11 @@ func (s *Service) Validate(token string) (string, error) {
 	}
 	m := hmac.New(sha256.New, s.secret)
 	m.Write([]byte(parts[0]))
-	sig, e := base64.RawURLEncoding.DecodeString(parts[1])
+	sig, e := decodeCanonical(parts[1])
 	if e != nil || !hmac.Equal(sig, m.Sum(nil)) {
 		return "", errors.New("invalid")
 	}
-	p, e := base64.RawURLEncoding.DecodeString(parts[0])
+	p, e := decodeCanonical(parts[0])
 	if e != nil {
 		return "", e
 	}
@@ -57,4 +57,12 @@ func (s *Service) Validate(token string) (string, error) {
 		return "", errors.New("invalid")
 	}
 	return c.ID, nil
+}
+
+func decodeCanonical(value string) ([]byte, error) {
+	decoded, err := base64.RawURLEncoding.DecodeString(value)
+	if err != nil || base64.RawURLEncoding.EncodeToString(decoded) != value {
+		return nil, errors.New("invalid")
+	}
+	return decoded, nil
 }
