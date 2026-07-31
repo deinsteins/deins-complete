@@ -51,3 +51,14 @@ The integration Compose file deliberately exposes PostgreSQL and Redis only on l
 Use managed PostgreSQL (Amazon RDS PostgreSQL is preferred) or an explicitly maintained temporary beta database; do not use Redis as account storage. Before a non-trivial migration, take and verify a PostgreSQL backup/snapshot. Deploy additive migrations first, then the API version. Run migrations once as a dedicated deployment step (`deinscomplete-api migrate up` or the release's migration command), never independently from every API replica.
 
 `/health` is process-only. When `DATABASE_ENABLED=true`, `/ready` additionally requires PostgreSQL connectivity. A healthy connection pool reconnects on recovery; readiness returns and completion authorization resumes without an API restart.
+
+## Creating private-beta invites
+
+With `REGISTRATION_MODE=invite`, create one single-use invite per tester from the EC2 server. The invite is tied to the supplied email and its raw value is printed only once; send it privately and never commit it.
+
+```bash
+docker compose -f docker-compose.prod.yml run --rm api \
+  /deinscomplete-admin create-invite tester@example.com 7
+```
+
+The final argument is an optional expiry in days (default `7`, maximum `30`). The tester must enter the same email and this code in **DeinsComplete: Sign In**.
