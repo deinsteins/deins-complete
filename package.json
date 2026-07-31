@@ -46,6 +46,18 @@
         "title": "DeinsComplete: Reset Authentication"
       },
       {
+        "command": "deinscomplete.signIn",
+        "title": "DeinsComplete: Sign In"
+      },
+      {
+        "command": "deinscomplete.signOut",
+        "title": "DeinsComplete: Sign Out"
+      },
+      {
+        "command": "deinscomplete.accountStatus",
+        "title": "DeinsComplete: Account Status"
+      },
+      {
         "command": "deinscomplete.clearCompletionCache",
         "title": "DeinsComplete: Clear Completion Cache"
       },

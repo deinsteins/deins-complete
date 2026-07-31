@@ -41,3 +41,27 @@ export interface BackendSettingsProvider {
 export interface ApiLogger {
   debug(message: string): void;
 }
+
+export interface AccountTokens {
+  accessToken: string;
+  refreshToken: string;
+  expiresIn: number;
+}
+
+export interface AccountDetails {
+  user: { id: string; email: string; displayName?: string };
+  plan: { code: string };
+}
+
+export interface AccountEntitlements {
+  plan: string;
+  features: { repositoryContext: boolean; streaming: boolean; premiumRouting: boolean };
+  limits: { monthlyCompletions: number; used: number; remaining: number };
+}
+
+export interface AccountInstallation {
+  id: string;
+  status: string;
+  createdAt: string;
+  lastSeenAt?: string;
+}

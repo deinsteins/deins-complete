@@ -16,6 +16,7 @@ import { getInstallationId } from "./identity/installationIdentity";
 import { InstallationService } from "./identity/installationService";
 import { FeedbackService } from "./feedback/feedbackService";
 import { AutoImportResolver } from "./completion/autoImportResolver";
+import { AccountService } from "./account/accountService";
 
 export function activate(context: vscode.ExtensionContext): void {
   const logger = new Logger();
@@ -27,7 +28,9 @@ export function activate(context: vscode.ExtensionContext): void {
     const statusBar = new DeinsCompleteStatusBar();
     const extensionVersion = String(context.extension.packageJSON.version);
     const backendClient = new DeinsCompleteClient(config, globalThis.fetch, logger, extensionVersion);
-    const installation = new InstallationService(() => getInstallationId(context.globalState), new CredentialStore(context.secrets), backendClient);
+    const credentials = new CredentialStore(context.secrets);
+    const installation = new InstallationService(() => getInstallationId(context.globalState), credentials, backendClient);
+    const account = new AccountService(backendClient, credentials);
     const authenticate = async (signal: AbortSignal): Promise<void> => {
       await installation.ensureRegistered(signal);
       backendClient.setInstallationToken(await installation.getToken());
@@ -72,7 +75,7 @@ export function activate(context: vscode.ExtensionContext): void {
       vscode.workspace.onDidChangeTextDocument((event) => repositoryContext.invalidate(event.document.uri)),
       vscode.window.onDidChangeActiveTextEditor((editor) => { if (editor !== undefined) repositoryContext.record(editor.document); }),
       vscode.languages.registerInlineCompletionItemProvider({ scheme: "file" }, completionProvider),
-      ...registerCommands(config, lifecycle, logger, backendClient, requests, installation, repositoryContext, engine, feedback, autoImports),
+      ...registerCommands(config, lifecycle, logger, backendClient, requests, installation, repositoryContext, engine, feedback, autoImports, account),
     );
     logger.info("DeinsComplete activated.");
   } catch (error) {

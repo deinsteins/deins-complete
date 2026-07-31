@@ -9,6 +9,7 @@ import { RepositoryContextBuilder } from "../context/repository/repositoryContex
 import { BackendCompletionEngine } from "../completion/backendCompletionEngine";
 import { FeedbackService } from "../feedback/feedbackService";
 import { AutoImportPlan, AutoImportResolver } from "../completion/autoImportResolver";
+import { AccountService } from "../account/accountService";
 
 export function registerCommands(
   config: ConfigService,
@@ -21,6 +22,7 @@ export function registerCommands(
   engine: BackendCompletionEngine,
   feedback: FeedbackService,
   autoImports: AutoImportResolver,
+  account: AccountService,
 ): vscode.Disposable[] {
   return [
     vscode.commands.registerCommand("deinscomplete.enable", async () => {
@@ -52,6 +54,35 @@ export function registerCommands(
       await installation.reset();
       logger.info("Installation authentication reset.");
       void vscode.window.showInformationMessage("DeinsComplete authentication reset. It will be renewed when needed.");
+    }),
+    vscode.commands.registerCommand("deinscomplete.signIn", async () => {
+      const email = await vscode.window.showInputBox({ prompt: "DeinsComplete account email", placeHolder: "you@example.com", ignoreFocusOut: true, validateInput: (value) => value.trim().includes("@") ? undefined : "Enter a valid email address." });
+      if (email === undefined) return;
+      try {
+        await installation.ensureRegistered();
+        await account.requestMagicCode(email.trim());
+        const code = await vscode.window.showInputBox({ prompt: "Enter the code sent to your email", ignoreFocusOut: true, password: true, validateInput: (value) => value.trim() === "" ? "Enter the sign-in code." : undefined });
+        if (code === undefined) return;
+        await account.verifyMagicCode(email.trim(), code.trim(), await installation.getToken());
+        logger.info("Account sign-in completed.");
+        void vscode.window.showInformationMessage("Signed in to DeinsComplete. This installation is linked to your account.");
+      } catch (error) {
+        logger.error("Account sign-in failed", error);
+        void vscode.window.showErrorMessage("DeinsComplete sign-in failed. Check the code and try again.");
+      }
+    }),
+    vscode.commands.registerCommand("deinscomplete.signOut", async () => {
+      try { await account.signOut(); logger.info("Account sign-out completed."); void vscode.window.showInformationMessage("Signed out of DeinsComplete. This installation remains linked to its account."); }
+      catch (error) { logger.error("Account sign-out failed", error); void vscode.window.showErrorMessage("DeinsComplete sign-out failed. Your local session was cleared."); }
+    }),
+    vscode.commands.registerCommand("deinscomplete.accountStatus", async () => {
+      try {
+        const status = await account.getStatus();
+        if (status === undefined) { void vscode.window.showInformationMessage("DeinsComplete account: not signed in.", "Sign In").then((choice) => { if (choice === "Sign In") void vscode.commands.executeCommand("deinscomplete.signIn"); }); return; }
+        const limits = status.entitlements.limits;
+        const report = `DeinsComplete Account\nSigned in: Yes\nEmail: ${status.account.user.email}\nPlan: ${status.account.plan.code}\nMonthly usage: ${limits.used} / ${limits.monthlyCompletions}\nInstallations: ${status.installations.length}`;
+        logger.info(report); void vscode.window.showInformationMessage(`DeinsComplete ${status.account.plan.code}: ${limits.used} / ${limits.monthlyCompletions} completions used`);
+      } catch (error) { logger.error("Account status failed", error); void vscode.window.showErrorMessage("Unable to load DeinsComplete account status."); }
     }),
     vscode.commands.registerCommand("deinscomplete.clearCompletionCache", () => { requests.clearCache(); logger.info("Completion cache cleared."); void vscode.window.showInformationMessage("DeinsComplete completion cache cleared."); }),
     vscode.commands.registerCommand("deinscomplete.feedbackHelpful", () => { feedback.record("helpful"); logger.info("Completion feedback=helpful"); }),

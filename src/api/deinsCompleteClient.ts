@@ -2,6 +2,10 @@ import {
   ApiCompletionRequest,
   ApiCompletionResponse,
   ApiLogger,
+  AccountDetails,
+  AccountEntitlements,
+  AccountInstallation,
+  AccountTokens,
   BackendHealthResult,
   BackendSettingsProvider,
 } from "./apiTypes";
@@ -29,9 +33,21 @@ export interface BackendClient {
   health(signal?: AbortSignal): Promise<BackendHealthResult>;
 }
 
+export interface AccountApiClient {
+  requestMagicCode(email: string, signal?: AbortSignal): Promise<void>;
+  verifyMagicCode(email: string, code: string, signal?: AbortSignal): Promise<AccountTokens>;
+  refreshAccount(refreshToken: string, signal?: AbortSignal): Promise<AccountTokens>;
+  logoutAccount(refreshToken: string, signal?: AbortSignal): Promise<void>;
+  getAccount(accessToken: string, signal?: AbortSignal): Promise<AccountDetails>;
+  getEntitlements(accessToken: string, signal?: AbortSignal): Promise<AccountEntitlements>;
+  linkInstallation(accessToken: string, installationToken: string, signal?: AbortSignal): Promise<void>;
+  getAccountInstallations(accessToken: string, signal?: AbortSignal): Promise<AccountInstallation[]>;
+  revokeAccountInstallation(accessToken: string, installationID: string, signal?: AbortSignal): Promise<void>;
+}
+
 type FetchFunction = (input: string, init?: RequestInit) => Promise<Response>;
 
-export class DeinsCompleteClient implements BackendClient {
+export class DeinsCompleteClient implements BackendClient, AccountApiClient {
   private token?: string;
   private unavailableUntil = 0;
   constructor(
@@ -82,6 +98,43 @@ export class DeinsCompleteClient implements BackendClient {
     }, signal);
     const payload=await this.parseJSON(response);if(!isRecord(payload)||!isRecord(payload.installation)||payload.installation.id!==installationId||typeof payload.token!=="string"||payload.token==="")throw new InvalidResponseError("Installation response is invalid.");return payload.token;
   }
+  async requestMagicCode(email: string, signal?: AbortSignal): Promise<void> {
+    await this.sendJSON("/v1/auth/magic/request", { email }, undefined, signal);
+  }
+  async verifyMagicCode(email: string, code: string, signal?: AbortSignal): Promise<AccountTokens> {
+    return this.tokens(await this.sendJSON("/v1/auth/magic/verify", { email, code }, undefined, signal));
+  }
+  async refreshAccount(refreshToken: string, signal?: AbortSignal): Promise<AccountTokens> {
+    return this.tokens(await this.sendJSON("/v1/auth/refresh", { refreshToken }, undefined, signal));
+  }
+  async logoutAccount(refreshToken: string, signal?: AbortSignal): Promise<void> {
+    await this.sendJSON("/v1/auth/logout", { refreshToken }, undefined, signal);
+  }
+  async getAccount(accessToken: string, signal?: AbortSignal): Promise<AccountDetails> {
+    const payload = await this.sendJSON("/v1/account", undefined, accessToken, signal, "GET");
+    if (!isRecord(payload) || !isRecord(payload.user) || typeof payload.user.id !== "string" || typeof payload.user.email !== "string" || !isRecord(payload.plan) || typeof payload.plan.code !== "string") throw new InvalidResponseError("Account response is invalid.");
+    return { user: { id: payload.user.id, email: payload.user.email, ...(typeof payload.user.displayName === "string" ? { displayName: payload.user.displayName } : {}) }, plan: { code: payload.plan.code } };
+  }
+  async getEntitlements(accessToken: string, signal?: AbortSignal): Promise<AccountEntitlements> {
+    const payload = await this.sendJSON("/v1/account/entitlements", undefined, accessToken, signal, "GET");
+    if (!isRecord(payload) || typeof payload.plan !== "string" || !isRecord(payload.features) || !isRecord(payload.limits) || typeof payload.features.repositoryContext !== "boolean" || typeof payload.features.streaming !== "boolean" || typeof payload.features.premiumRouting !== "boolean" || typeof payload.limits.monthlyCompletions !== "number" || typeof payload.limits.used !== "number" || typeof payload.limits.remaining !== "number") throw new InvalidResponseError("Entitlements response is invalid.");
+    return {
+      plan: payload.plan,
+      features: { repositoryContext: payload.features.repositoryContext, streaming: payload.features.streaming, premiumRouting: payload.features.premiumRouting },
+      limits: { monthlyCompletions: payload.limits.monthlyCompletions, used: payload.limits.used, remaining: payload.limits.remaining },
+    };
+  }
+  async linkInstallation(accessToken: string, installationToken: string, signal?: AbortSignal): Promise<void> {
+    await this.sendJSON("/v1/installations/link", {}, accessToken, signal, "POST", { "X-DeinsComplete-Installation-Token": installationToken });
+  }
+  async getAccountInstallations(accessToken: string, signal?: AbortSignal): Promise<AccountInstallation[]> {
+    const payload = await this.sendJSON("/v1/account/installations", undefined, accessToken, signal, "GET");
+    if (!Array.isArray(payload) || !payload.every((item) => isRecord(item) && typeof item.id === "string" && typeof item.status === "string" && typeof item.createdAt === "string" && (item.lastSeenAt === undefined || typeof item.lastSeenAt === "string"))) throw new InvalidResponseError("Installations response is invalid.");
+    return payload as AccountInstallation[];
+  }
+  async revokeAccountInstallation(accessToken: string, installationID: string, signal?: AbortSignal): Promise<void> {
+    await this.sendJSON(`/v1/account/installations/${encodeURIComponent(installationID)}`, undefined, accessToken, signal, "DELETE");
+  }
 
   async health(signal?: AbortSignal): Promise<BackendHealthResult> {
     const startedAt = Date.now();
@@ -128,6 +181,20 @@ export class DeinsCompleteClient implements BackendClient {
     } finally {
       cancellation.dispose();
     }
+  }
+
+  private async sendJSON(path: string, body: unknown, accessToken: string | undefined, signal: AbortSignal | undefined, method = "POST", extraHeaders?: Record<string, string>): Promise<unknown> {
+    const headers: Record<string, string> = { Accept: "application/json", ...extraHeaders };
+    if (body !== undefined) headers["Content-Type"] = "application/json";
+    if (accessToken !== undefined) headers.Authorization = `Bearer ${accessToken}`;
+    const response = await this.send(path, { method, headers, ...(body === undefined ? {} : { body: JSON.stringify(body) }) }, signal);
+    if (response.status === 204) return undefined;
+    return this.parseJSON(response);
+  }
+
+  private tokens(payload: unknown): AccountTokens {
+    if (!isRecord(payload) || typeof payload.accessToken !== "string" || payload.accessToken === "" || typeof payload.refreshToken !== "string" || payload.refreshToken === "" || typeof payload.expiresIn !== "number" || !Number.isFinite(payload.expiresIn) || payload.expiresIn <= 0) throw new InvalidResponseError("Authentication response is invalid.");
+    return { accessToken: payload.accessToken, refreshToken: payload.refreshToken, expiresIn: payload.expiresIn };
   }
 
   private async parseCompletionResponse(response: Response): Promise<ApiCompletionResponse> {
