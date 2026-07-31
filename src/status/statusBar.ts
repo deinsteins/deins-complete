@@ -16,7 +16,14 @@ export class DeinsCompleteStatusBar implements vscode.Disposable {
 
   setQuota(quota: QuotaPresentation | undefined, state: DeinsCompleteState): void { this.quota = quota; this.update(state); }
 
-  setActivity(text: "Thinking…" | "Cached" | "Offline" | "Ready"): void { if (text === "Ready") return; this.item.text = `$(sparkle) DeinsComplete: ${text}`; this.item.tooltip = "DeinsComplete inline completion"; this.item.show(); }
+  setSignInRequired(): void {
+    this.item.text = "$(account) DeinsComplete: Sign in";
+    this.item.tooltip = "Sign in is required to use DeinsComplete inline completions.";
+    this.item.command = "deinscomplete.signIn";
+    this.item.show();
+  }
+
+  setActivity(text: "Thinking…" | "Cached" | "Offline" | "Ready"): void { if (text === "Ready") return; this.item.text = `$(sync~spin) DeinsComplete: ${text}`; this.item.tooltip = "DeinsComplete inline completion in progress"; this.item.command = undefined; this.item.show(); }
 
   dispose(): void { this.item.dispose(); }
 }

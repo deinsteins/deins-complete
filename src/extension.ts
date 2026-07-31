@@ -36,6 +36,7 @@ export function activate(context: vscode.ExtensionContext): void {
       try {
         if (!await account.isRequired()) return true;
         if (await account.isSignedIn()) return true;
+        statusBar.setSignInRequired();
         if (!accountNoticeShown) { accountNoticeShown = true; void vscode.window.showInformationMessage("Sign in to DeinsComplete to enable inline completions.", "Sign In").then((choice) => { if (choice === "Sign In") void vscode.commands.executeCommand("deinscomplete.signIn"); }); }
         return false;
       } catch { return true; } // Existing/temporarily unavailable backend retains its normal behavior.
@@ -93,7 +94,8 @@ export function activate(context: vscode.ExtensionContext): void {
       lifecycle.onDidChangeState((state) => statusBar.update(state)),
       vscode.workspace.onDidChangeTextDocument((event) => repositoryContext.invalidate(event.document.uri)),
       vscode.window.onDidChangeActiveTextEditor((editor) => { if (editor !== undefined) repositoryContext.record(editor.document); }),
-      vscode.languages.registerInlineCompletionItemProvider({ scheme: "file" }, completionProvider),
+      // Remote WSL/SSH workspaces use vscode-remote rather than file URIs.
+      vscode.languages.registerInlineCompletionItemProvider([{ scheme: "file" }, { scheme: "vscode-remote" }], completionProvider),
       ...registerCommands(config, lifecycle, logger, backendClient, requests, installation, repositoryContext, engine, feedback, autoImports, account, refreshAccountStatus),
     );
     logger.info("DeinsComplete activated.");
