@@ -28,15 +28,17 @@ type completionResponse struct {
 }
 
 type chatCompletionResponse struct {
-	Choices []struct {
-		Message struct {
-			Content string `json:"content"`
-		} `json:"message"`
-		FinishReason string `json:"finish_reason"`
-	} `json:"choices"`
-	Usage *struct {
+	Choices []chatChoice `json:"choices"`
+	Usage   *struct {
 		PromptTokens     int `json:"prompt_tokens"`
 		CompletionTokens int `json:"completion_tokens"`
 		TotalTokens      int `json:"total_tokens"`
 	} `json:"usage,omitempty"`
+}
+
+type chatChoice struct {
+	Message struct {
+		Content string `json:"content"`
+	} `json:"message"`
+	FinishReason string `json:"finish_reason"`
 }

@@ -110,31 +110,45 @@ func (provider *Provider) Complete(ctx context.Context, request completion.Reque
 	return result, nil
 }
 
-func bestChoice(request completion.Request, choices []struct {
-	Message struct {
-		Content string `json:"content"`
-	} `json:"message"`
-	FinishReason string `json:"finish_reason"`
-}) string {
+func bestChoice(request completion.Request, choices []chatChoice) string {
 	best, bestScore := "", int(^uint(0)>>1)
-	prefix := request.Context.Prefix[max(0, len(request.Context.Prefix)-80):]
 	for _, choice := range choices {
 		text := strings.TrimSpace(choice.Message.Content)
 		if text == "" {
 			continue
 		}
-		score := len(text)
-		if prefix != "" && strings.Contains(text, prefix) {
-			score += 10000
-		}
-		if request.Context.Suffix != "" && strings.Contains(text, request.Context.Suffix[:min(80, len(request.Context.Suffix))]) {
-			score += 1000
-		}
+		score := candidatePenalty(request, text)
 		if score < bestScore {
 			best, bestScore = choice.Message.Content, score
 		}
 	}
 	return best
+}
+
+func candidatePenalty(request completion.Request, text string) int {
+	score := len(text)
+	lower := strings.ToLower(strings.TrimSpace(text))
+	prefix := request.Context.Prefix[max(0, len(request.Context.Prefix)-80):]
+	if strings.HasPrefix(lower, "```") || strings.HasPrefix(lower, "here is") || strings.HasPrefix(lower, "completion:") || strings.ContainsRune(text, '\x00') {
+		score += 10000
+	}
+	if prefix != "" && strings.Contains(text, prefix) {
+		score += 10000
+	}
+	if request.Context.Suffix != "" && strings.Contains(text, request.Context.Suffix[:min(80, len(request.Context.Suffix))]) {
+		score += 1000
+	}
+	switch strings.ToLower(request.Context.Language) {
+	case "typescript", "typescriptreact", "javascript", "javascriptreact":
+		if strings.HasPrefix(lower, "def ") || strings.HasPrefix(lower, "package main") || strings.HasPrefix(lower, "func ") {
+			score += 5000
+		}
+	case "python":
+		if strings.HasPrefix(lower, "const ") || strings.HasPrefix(lower, "let ") || strings.HasPrefix(lower, "func ") {
+			score += 5000
+		}
+	}
+	return score
 }
 func min(a, b int) int {
 	if a < b {

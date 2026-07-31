@@ -148,6 +148,16 @@ func TestPromptIncludesRepositoryContext(t *testing.T) {
 	}
 }
 
+func TestBestChoiceRejectsArtifactsAndWrongLanguage(t *testing.T) {
+	choices := make([]chatChoice, 3)
+	choices[0].Message.Content = "```ts\nawait getUser()\n```"
+	choices[1].Message.Content = "def get_user():"
+	choices[2].Message.Content = "await getUser()"
+	if got := bestChoice(testRequest(), choices); got != "await getUser()" {
+		t.Fatalf("got %q", got)
+	}
+}
+
 func TestProviderStreamsOpenAICompatibleSSE(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		var payload ChatCompletionRequest
