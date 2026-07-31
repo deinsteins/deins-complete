@@ -31,6 +31,14 @@ export function activate(context: vscode.ExtensionContext): void {
     const credentials = new CredentialStore(context.secrets);
     const installation = new InstallationService(() => getInstallationId(context.globalState), credentials, backendClient);
     const account = new AccountService(backendClient, credentials);
+    const refreshAccountStatus = async (): Promise<void> => {
+      try {
+        const status = await account.getStatus();
+        if (status === undefined) { statusBar.setQuota(undefined, lifecycle.getState()); return; }
+        const limits = status.entitlements.limits;
+        statusBar.setQuota({ plan: status.account.plan.code, used: limits.used, limit: limits.monthlyCompletions }, lifecycle.getState());
+      } catch { /* account data is optional; keep the status bar responsive */ }
+    };
     const authenticate = async (signal: AbortSignal): Promise<void> => {
       await installation.ensureRegistered(signal);
       backendClient.setInstallationToken(await installation.getToken());
@@ -61,6 +69,8 @@ export function activate(context: vscode.ExtensionContext): void {
     const autoImports = new AutoImportResolver();
     const completionProvider = new DeinsCompleteInlineCompletionProvider(lifecycle, new ContextBuilder(config, undefined, getSafeFilePath), repositoryContext, requests, logger, autoImports, feedback);
     statusBar.update(lifecycle.getState());
+    void refreshAccountStatus();
+    const accountRefresh = setInterval(() => void refreshAccountStatus(), 10 * 60 * 1000);
     if (!context.globalState.get<boolean>("deinscomplete.onboarding.seen")) {
       void context.globalState.update("deinscomplete.onboarding.seen", true);
       void vscode.window.showInformationMessage("DeinsComplete is ready. Pause after typing to see ghost text; press Tab to accept or Esc to dismiss.", "Open Diagnostics").then((choice) => { if (choice === "Open Diagnostics") void vscode.commands.executeCommand("deinscomplete.diagnostics"); });
@@ -68,14 +78,14 @@ export function activate(context: vscode.ExtensionContext): void {
 
     context.subscriptions.push(
       statusBar,
-      { dispose: () => { if (statusReset !== undefined) clearTimeout(statusReset); } },
+      { dispose: () => { if (statusReset !== undefined) clearTimeout(statusReset); clearInterval(accountRefresh); } },
       { dispose: () => requests.dispose() },
       lifecycle.start(),
       lifecycle.onDidChangeState((state) => statusBar.update(state)),
       vscode.workspace.onDidChangeTextDocument((event) => repositoryContext.invalidate(event.document.uri)),
       vscode.window.onDidChangeActiveTextEditor((editor) => { if (editor !== undefined) repositoryContext.record(editor.document); }),
       vscode.languages.registerInlineCompletionItemProvider({ scheme: "file" }, completionProvider),
-      ...registerCommands(config, lifecycle, logger, backendClient, requests, installation, repositoryContext, engine, feedback, autoImports, account),
+      ...registerCommands(config, lifecycle, logger, backendClient, requests, installation, repositoryContext, engine, feedback, autoImports, account, refreshAccountStatus),
     );
     logger.info("DeinsComplete activated.");
   } catch (error) {

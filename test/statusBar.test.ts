@@ -10,6 +10,12 @@ test("enabled status bar presentation disables DeinsComplete", () => {
   });
 });
 
+test("enabled status bar exposes remaining monthly quota in its hover tooltip", () => {
+  const presentation = getStatusBarPresentation("enabled", { plan: "free", used: 371, limit: 2000 });
+  assert.match(presentation.tooltip, /Plan: free/);
+  assert.match(presentation.tooltip, /1,629 remaining \(371 \/ 2,000\)/);
+});
+
 test("disabled status bar presentation enables DeinsComplete", () => {
   assert.deepEqual(getStatusBarPresentation("disabled"), {
     text: "$(circle-slash) DeinsComplete",

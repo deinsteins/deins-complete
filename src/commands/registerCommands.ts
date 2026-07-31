@@ -23,6 +23,7 @@ export function registerCommands(
   feedback: FeedbackService,
   autoImports: AutoImportResolver,
   account: AccountService,
+  refreshAccountStatus: () => Promise<void>,
 ): vscode.Disposable[] {
   return [
     vscode.commands.registerCommand("deinscomplete.enable", async () => {
@@ -66,6 +67,7 @@ export function registerCommands(
         const code = await vscode.window.showInputBox({ prompt: "Enter the code sent to your email", ignoreFocusOut: true, password: true, validateInput: (value) => value.trim() === "" ? "Enter the sign-in code." : undefined });
         if (code === undefined) return;
         await account.verifyMagicCode(email.trim(), code.trim(), await installation.getToken());
+        await refreshAccountStatus();
         logger.info("Account sign-in completed.");
         void vscode.window.showInformationMessage("Signed in to DeinsComplete. This installation is linked to your account.");
       } catch (error) {
@@ -82,6 +84,7 @@ export function registerCommands(
         const status = await account.getStatus();
         if (status === undefined) { void vscode.window.showInformationMessage("DeinsComplete account: not signed in.", "Sign In").then((choice) => { if (choice === "Sign In") void vscode.commands.executeCommand("deinscomplete.signIn"); }); return; }
         const limits = status.entitlements.limits;
+        await refreshAccountStatus();
         const report = `DeinsComplete Account\nSigned in: Yes\nEmail: ${status.account.user.email}\nPlan: ${status.account.plan.code}\nMonthly usage: ${limits.used} / ${limits.monthlyCompletions}\nInstallations: ${status.installations.length}`;
         logger.info(report); void vscode.window.showInformationMessage(`DeinsComplete ${status.account.plan.code}: ${limits.used} / ${limits.monthlyCompletions} completions used`);
       } catch (error) { logger.error("Account status failed", error); void vscode.window.showErrorMessage("Unable to load DeinsComplete account status."); }
