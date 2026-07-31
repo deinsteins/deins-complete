@@ -41,7 +41,18 @@ export function activate(context: vscode.ExtensionContext): void {
     const engine = new BackendCompletionEngine(backendClient, extensionVersion, logger, authenticate, refreshAuthentication, () => {
       if (!quotaNotified) { quotaNotified = true; void vscode.window.showWarningMessage("DeinsComplete daily completion limit reached."); }
     }, () => config.streamingEnabled());
-    const requests = new RequestManager(engine, config);
+    let statusReset: ReturnType<typeof setTimeout> | undefined;
+    const requests = new RequestManager(engine, config, (activity) => {
+      if (statusReset !== undefined) clearTimeout(statusReset);
+      if (activity === "thinking") {
+        statusBar.setActivity("Thinking…");
+      } else if (activity === "cached") {
+        statusBar.setActivity("Cached");
+        statusReset = setTimeout(() => statusBar.update(lifecycle.getState()), 800);
+      } else {
+        statusBar.update(lifecycle.getState());
+      }
+    });
     const repositoryContext = new RepositoryContextBuilder(config);
     const feedback = new FeedbackService();
     const autoImports = new AutoImportResolver();
@@ -54,6 +65,7 @@ export function activate(context: vscode.ExtensionContext): void {
 
     context.subscriptions.push(
       statusBar,
+      { dispose: () => { if (statusReset !== undefined) clearTimeout(statusReset); } },
       { dispose: () => requests.dispose() },
       lifecycle.start(),
       lifecycle.onDidChangeState((state) => statusBar.update(state)),
