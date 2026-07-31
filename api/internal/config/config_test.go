@@ -117,3 +117,32 @@ func TestParseFIMFilenameContextIsExplicit(t *testing.T) {
 		t.Fatal("expected invalid FIM filename context error")
 	}
 }
+
+func TestParseDatabaseAccountConfiguration(t *testing.T) {
+	values := map[string]string{
+		"DATABASE_ENABLED":               "true",
+		"DATABASE_URL":                   "postgres://user:password@localhost/deinscomplete",
+		"ACCOUNT_ACCESS_TOKEN_SECRET":    "01234567890123456789012345678901",
+		"REGISTRATION_MODE":              "invite",
+		"DATABASE_MAX_OPEN_CONNS":        "12",
+		"DATABASE_MAX_IDLE_CONNS":        "4",
+		"ACCOUNT_REFRESH_TOKEN_TTL_DAYS": "14",
+		"ACCOUNT_MAGIC_CODE_TTL_MINUTES": "10",
+	}
+	configuration, err := parse(func(key string) string { return values[key] })
+	if err != nil || configuration.Database.MaxOpenConns != 12 || configuration.Account.RefreshTokenTTL != 14*24*time.Hour || configuration.Account.MagicCodeTTL != 10*time.Minute {
+		t.Fatalf("unexpected account database configuration: %#v %#v %v", configuration.Database, configuration.Account, err)
+	}
+}
+
+func TestParseRejectsIncompleteDatabaseAccountConfiguration(t *testing.T) {
+	_, err := parse(func(key string) string {
+		if key == "DATABASE_ENABLED" {
+			return "true"
+		}
+		return ""
+	})
+	if err == nil {
+		t.Fatal("expected database configuration error")
+	}
+}

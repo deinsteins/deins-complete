@@ -7,6 +7,8 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"deinscomplete/api/internal/account"
+	"deinscomplete/api/internal/accountauth"
 	"deinscomplete/api/internal/auth"
 	"deinscomplete/api/internal/completion"
 	"deinscomplete/api/internal/http/handlers"
@@ -16,15 +18,38 @@ import (
 	"deinscomplete/api/internal/usage"
 )
 
-func newRouter(logger *slog.Logger, service *completion.Service, authService *auth.Service, enabled bool, streaming bool, limiter ratelimit.Limiter, tracker usage.Tracker, readiness func(context.Context) error) http.Handler {
+func newRouter(logger *slog.Logger, service *completion.Service, authService *auth.Service, enabled bool, streaming bool, limiter ratelimit.Limiter, tracker usage.Tracker, monthly usage.MonthlyTracker, readiness func(context.Context) error, repo *account.Repository, accounts *account.Service, accountTokens *accountauth.Service) http.Handler {
 	router := chi.NewRouter()
 	router.Use(middleware.RequestID, middleware.Recovery(logger), middleware.Logging(logger))
 	router.Get("/", handlers.Root)
 	router.Get("/health", handlers.Health)
 	router.Get("/ready", handlers.Ready(readiness))
-	router.Post("/v1/installations/register", handlers.RegisterInstallations(authService))
+	router.Post("/v1/installations/register", handlers.RegisterInstallations(authService, repo))
+	if accounts != nil && accountTokens != nil && repo != nil {
+		h := handlers.NewAccountHandler(accounts, monthly)
+		authRoutes := chi.NewRouter()
+		authRoutes.Use(middleware.PublicRateLimit(ratelimit.New(10, 5)))
+		authRoutes.Post("/v1/auth/magic/request", h.MagicRequest)
+		authRoutes.Post("/v1/auth/magic/verify", h.MagicVerify)
+		authRoutes.Post("/v1/auth/refresh", h.Refresh)
+		authRoutes.Post("/v1/auth/logout", h.Logout)
+		router.Mount("/", authRoutes)
+		user := middleware.UserAuth(accountTokens)
+		router.With(user).Get("/v1/account", h.Account)
+		router.With(user).Get("/v1/account/entitlements", h.Entitlements)
+		router.With(user).Get("/v1/account/installations", h.Installations)
+		router.With(user).Delete("/v1/account/installations/{id}", h.Revoke)
+		router.With(user, middleware.InstallationToken(authService, repo)).Post("/v1/installations/link", h.Link)
+	}
 	completionHandler := http.Handler(handlers.NewCompletionHandler(service, logger))
 	if enabled {
+		if repo != nil {
+			completionHandler = middleware.Entitlements(repo)(completionHandler)
+			if monthly != nil {
+				completionHandler = middleware.MonthlyQuota(monthly)(completionHandler)
+			}
+			completionHandler = middleware.InstallationStatus(repo)(completionHandler)
+		}
 		if tracker != nil {
 			completionHandler = middleware.Quota(tracker)(completionHandler)
 		}
@@ -37,6 +62,13 @@ func newRouter(logger *slog.Logger, service *completion.Service, authService *au
 	if streaming {
 		streamHandler := http.Handler(handlers.NewStreamHandler(service, logger))
 		if enabled {
+			if repo != nil {
+				streamHandler = middleware.Entitlements(repo)(streamHandler)
+				if monthly != nil {
+					streamHandler = middleware.MonthlyQuota(monthly)(streamHandler)
+				}
+				streamHandler = middleware.InstallationStatus(repo)(streamHandler)
+			}
 			if tracker != nil {
 				streamHandler = middleware.Quota(tracker)(streamHandler)
 			}

@@ -40,6 +40,8 @@ type Config struct {
 	Router      RouterConfig
 	Streaming   bool
 	Redis       RedisConfig
+	Database    DatabaseConfig
+	Account     AccountConfig
 }
 type RouterConfig struct {
 	FallbackEnabled bool
@@ -68,6 +70,19 @@ type RedisConfig struct {
 	DB                                        int
 	TLS                                       bool
 	ConnectTimeout, ReadTimeout, WriteTimeout time.Duration
+}
+type DatabaseConfig struct {
+	Enabled                    bool
+	URL                        string
+	MaxOpenConns, MaxIdleConns int
+	ConnMaxLifetime            time.Duration
+}
+type AccountConfig struct {
+	RegistrationMode                               string
+	AccessTokenSecret                              string
+	AccessTokenTTL, RefreshTokenTTL                time.Duration
+	MagicCodeTTL                                   time.Duration
+	SMTPAddr, SMTPFrom, SMTPUsername, SMTPPassword string
 }
 
 func Load() (Config, error) {
@@ -98,11 +113,16 @@ func parse(lookup func(string) string) (Config, error) {
 		Router:     RouterConfig{FallbackEnabled: lookup("AI_FALLBACK_ENABLED") == "true", MaxAttempts: 2, Timeout: 8 * time.Second},
 		Streaming:  lookup("STREAMING_ENABLED") == "true",
 		Redis:      RedisConfig{Enabled: lookup("REDIS_ENABLED") == "true", Addr: lookup("REDIS_ADDR"), Username: lookup("REDIS_USERNAME"), Password: lookup("REDIS_PASSWORD"), TLS: lookup("REDIS_TLS_ENABLED") == "true", ConnectTimeout: 2 * time.Second, ReadTimeout: time.Second, WriteTimeout: time.Second},
+		Database:   DatabaseConfig{Enabled: lookup("DATABASE_ENABLED") == "true", URL: lookup("DATABASE_URL"), MaxOpenConns: 10, MaxIdleConns: 5, ConnMaxLifetime: 30 * time.Minute},
+		Account:    AccountConfig{RegistrationMode: valueOrDefault(lookup("REGISTRATION_MODE"), "invite"), AccessTokenSecret: lookup("ACCOUNT_ACCESS_TOKEN_SECRET"), AccessTokenTTL: 30 * time.Minute, RefreshTokenTTL: 30 * 24 * time.Hour, MagicCodeTTL: 15 * time.Minute, SMTPAddr: lookup("ACCOUNT_SMTP_ADDR"), SMTPFrom: lookup("ACCOUNT_SMTP_FROM"), SMTPUsername: lookup("ACCOUNT_SMTP_USERNAME"), SMTPPassword: lookup("ACCOUNT_SMTP_PASSWORD")},
 	}
 	if config.Redis.Enabled && config.Redis.Addr == "" {
 		return Config{}, fmt.Errorf("REDIS_ADDR is required when REDIS_ENABLED=true")
 	}
 	if err := parseRedisConfig(&config.Redis, lookup); err != nil {
+		return Config{}, err
+	}
+	if err := parseDatabaseConfig(&config, lookup); err != nil {
 		return Config{}, err
 	}
 
@@ -152,6 +172,69 @@ func parse(lookup func(string) string) (Config, error) {
 		return Config{}, err
 	}
 	return config, nil
+}
+
+func parseDatabaseConfig(config *Config, lookup func(string) string) error {
+	if !config.Database.Enabled {
+		return nil
+	}
+	if config.Database.URL == "" {
+		return fmt.Errorf("DATABASE_URL is required when DATABASE_ENABLED=true")
+	}
+	if config.Environment == "production" && (config.Account.SMTPAddr == "" || config.Account.SMTPFrom == "") {
+		return fmt.Errorf("ACCOUNT_SMTP_ADDR and ACCOUNT_SMTP_FROM are required when database accounts are enabled in production")
+	}
+	if config.Account.RegistrationMode != "open" && config.Account.RegistrationMode != "invite" && config.Account.RegistrationMode != "disabled" {
+		return fmt.Errorf("invalid REGISTRATION_MODE value: %s", config.Account.RegistrationMode)
+	}
+	if len(config.Account.AccessTokenSecret) < 32 {
+		return fmt.Errorf("ACCOUNT_ACCESS_TOKEN_SECRET must be at least 32 bytes when DATABASE_ENABLED=true")
+	}
+	for _, item := range []struct {
+		key string
+		set func(int)
+		min int
+		max int
+	}{
+		{"DATABASE_MAX_OPEN_CONNS", func(value int) { config.Database.MaxOpenConns = value }, 1, 100},
+		{"DATABASE_MAX_IDLE_CONNS", func(value int) { config.Database.MaxIdleConns = value }, 0, 100},
+	} {
+		if raw := lookup(item.key); raw != "" {
+			value, err := strconv.Atoi(raw)
+			if err != nil || value < item.min || value > item.max {
+				return fmt.Errorf("invalid %s value: %s", item.key, raw)
+			}
+			item.set(value)
+		}
+	}
+	if config.Database.MaxIdleConns > config.Database.MaxOpenConns {
+		return fmt.Errorf("DATABASE_MAX_IDLE_CONNS must not exceed DATABASE_MAX_OPEN_CONNS")
+	}
+	for _, item := range []struct {
+		key string
+		set func(time.Duration)
+		min int
+		max int
+	}{
+		{"DATABASE_CONN_MAX_LIFETIME_MINUTES", func(value time.Duration) { config.Database.ConnMaxLifetime = value }, 1, 1440},
+		{"ACCOUNT_ACCESS_TOKEN_TTL_MINUTES", func(value time.Duration) { config.Account.AccessTokenTTL = value }, 5, 120},
+		{"ACCOUNT_REFRESH_TOKEN_TTL_DAYS", func(value time.Duration) { config.Account.RefreshTokenTTL = value }, 1, 90},
+		{"ACCOUNT_MAGIC_CODE_TTL_MINUTES", func(value time.Duration) { config.Account.MagicCodeTTL = value }, 5, 30},
+	} {
+		if raw := lookup(item.key); raw != "" {
+			value, err := strconv.Atoi(raw)
+			if err != nil || value < item.min || value > item.max {
+				return fmt.Errorf("invalid %s value: %s", item.key, raw)
+			}
+			switch item.key {
+			case "ACCOUNT_REFRESH_TOKEN_TTL_DAYS":
+				item.set(time.Duration(value) * 24 * time.Hour)
+			default:
+				item.set(time.Duration(value) * time.Minute)
+			}
+		}
+	}
+	return nil
 }
 
 func parseRedisConfig(redisConfig *RedisConfig, lookup func(string) string) error {

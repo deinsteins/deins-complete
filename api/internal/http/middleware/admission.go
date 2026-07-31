@@ -4,10 +4,34 @@ import (
 	"deinscomplete/api/internal/http/response"
 	"deinscomplete/api/internal/ratelimit"
 	"deinscomplete/api/internal/usage"
+	"net"
 	"net/http"
 	"strconv"
 	"time"
 )
+
+// PublicRateLimit protects account endpoints separately from completion admission.
+func PublicRateLimit(l ratelimit.Limiter) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			host, _, err := net.SplitHostPort(r.RemoteAddr)
+			if err != nil {
+				host = r.RemoteAddr
+			}
+			result := l.Allow(r.Context(), "auth:"+host)
+			if result.Err != nil {
+				response.WriteError(w, 503, "SERVICE_UNAVAILABLE", "Service temporarily unavailable.", GetRequestID(r.Context()))
+				return
+			}
+			if !result.Allowed {
+				retry(w, result.RetryAfter)
+				response.WriteError(w, 429, "RATE_LIMITED", "Too many requests.", GetRequestID(r.Context()))
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
+}
 
 func RateLimit(l ratelimit.Limiter) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {

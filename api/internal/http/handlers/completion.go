@@ -46,6 +46,10 @@ func (handler *CompletionHandler) ServeHTTP(writer http.ResponseWriter, request 
 		response.WriteError(writer, http.StatusBadRequest, "INVALID_REQUEST", "Completion request is invalid.", requestID)
 		return
 	}
+	if entitlements, ok := middleware.EntitlementsFromContext(request.Context()); ok && !entitlements.RepositoryContext {
+		// Repository context is an optional quality enhancement; Free safely falls back to current-file context.
+		completionRequest.RepositoryContext = nil
+	}
 
 	repositoryFiles, repositoryChars := 0, 0
 	if completionRequest.RepositoryContext != nil {

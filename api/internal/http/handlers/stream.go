@@ -29,6 +29,15 @@ func (handler *StreamHandler) ServeHTTP(writer http.ResponseWriter, request *htt
 		response.WriteError(writer, http.StatusBadRequest, "INVALID_REQUEST", "Completion request is invalid.", requestID)
 		return
 	}
+	if entitlements, ok := middleware.EntitlementsFromContext(request.Context()); ok {
+		if !entitlements.Streaming {
+			response.WriteError(writer, http.StatusForbidden, "FEATURE_NOT_AVAILABLE", "Streaming is not available for this plan.", requestID)
+			return
+		}
+		if !entitlements.RepositoryContext {
+			completionRequest.RepositoryContext = nil
+		}
+	}
 	flusher, ok := writer.(http.Flusher)
 	if !ok {
 		flusher = noopFlusher{}
