@@ -10,6 +10,8 @@ const enabledSetting = "enabled";
 
 export class ConfigService implements EnabledConfiguration, ContextLimitsProvider, BackendSettingsProvider, RepositoryContextSettings {
 	qualityInsightsEnabled(){return vscode.workspace.getConfiguration(namespace).get<boolean>("qualityInsights.enabled",false)}
+	qualityInsightsConfigured(){const value=vscode.workspace.getConfiguration(namespace).inspect<boolean>("qualityInsights.enabled");return value?.globalValue!==undefined||value?.workspaceValue!==undefined||value?.workspaceFolderValue!==undefined}
+	async setQualityInsightsEnabled(enabled:boolean){await vscode.workspace.getConfiguration(namespace).update("qualityInsights.enabled",enabled,vscode.ConfigurationTarget.Global)}
   debounceMs(){return Math.max(0,Math.min(2000,vscode.workspace.getConfiguration(namespace).get<number>("completion.debounceMs",150)))}
   cacheEnabled(){return vscode.workspace.getConfiguration(namespace).get<boolean>("cache.enabled",true)}
   cacheTtlMs(){const v=vscode.workspace.getConfiguration(namespace).get<number>("cache.ttlMs",60000);return v>=1000&&v<=300000?v:60000}

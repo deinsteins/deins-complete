@@ -4,7 +4,7 @@ DeinsComplete sends bounded current-file context and, when enabled, small releva
 
 ## Optional quality insights
 
-`deinscomplete.qualityInsights.enabled` is **off by default**. When a tester explicitly enables it and the operator enables `QUALITY_EVENTS_ENABLED`, the extension sends only:
+`deinscomplete.qualityInsights.enabled` is **off by default**. The extension offers a one-time consent prompt; dismissing or declining it prevents repeated notifications. When a tester explicitly enables it and the operator enables `QUALITY_EVENTS_ENABLED`, the extension sends only:
 
 - whether a suggestion was shown or accepted;
 - a random completion correlation ID and safe backend request ID;

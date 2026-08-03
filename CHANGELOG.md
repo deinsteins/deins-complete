@@ -4,6 +4,7 @@
 
 - Fixed production releases to run additive database migrations before restarting the API.
 - Fixed the Compose migration service to execute the migration binary instead of the API entrypoint.
+- Added a one-time, non-blocking consent prompt for optional privacy-safe quality insights.
 
 ## 0.1.14
 

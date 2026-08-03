@@ -21,6 +21,7 @@ import { completionFocus } from "./completion/contextComplexity";
 import { conflictingInlineCompletionExtensions } from "./completion/conflictDetection";
 import { showAccountCenter, showWelcome } from "./ui/extensionPanels";
 import { QualityReporter } from "./feedback/qualityReporter";
+import { QualityConsent, shouldOfferQualityInsights } from "./feedback/qualityConsent";
 
 export function activate(context: vscode.ExtensionContext): void {
   const logger = new Logger();
@@ -102,6 +103,31 @@ export function activate(context: vscode.ExtensionContext): void {
     });
     const feedback = new FeedbackService(context.workspaceState);
     const quality = new QualityReporter(config, backendClient, logger);
+    const qualityConsentKey = "deinscomplete.qualityInsights.consent.v1";
+    let qualityConsentTimer: ReturnType<typeof setTimeout> | undefined;
+    if (shouldOfferQualityInsights(context.globalState.get<QualityConsent>(qualityConsentKey), config.qualityInsightsConfigured(), config.qualityInsightsEnabled())) {
+      qualityConsentTimer = setTimeout(() => {
+        void vscode.window.showInformationMessage(
+          "Help improve DeinsComplete with privacy-safe completion metrics? No source code or file paths are sent.",
+          "Enable Quality Insights",
+          "Not Now",
+          "Learn More",
+        ).then(async (choice) => {
+          if (choice === "Enable Quality Insights") {
+            await config.setQualityInsightsEnabled(true);
+            await context.globalState.update(qualityConsentKey, "enabled" satisfies QualityConsent);
+            logger.info("Privacy-safe quality insights enabled by user consent.");
+            return;
+          }
+          if (choice === "Learn More") {
+            await context.globalState.update(qualityConsentKey, "learned-more" satisfies QualityConsent);
+            await vscode.env.openExternal(vscode.Uri.parse("https://github.com/deinsteins/deins-complete/blob/master/docs/privacy.md"));
+            return;
+          }
+          await context.globalState.update(qualityConsentKey, "declined" satisfies QualityConsent);
+        });
+      }, 2_000);
+    }
     let statusReset: ReturnType<typeof setTimeout> | undefined;
     const requests = new RequestManager(engine, config, (activity) => {
       if (statusReset !== undefined) clearTimeout(statusReset);
@@ -137,7 +163,7 @@ export function activate(context: vscode.ExtensionContext): void {
     }
     context.subscriptions.push(
       statusBar,
-      { dispose: () => { if (statusReset !== undefined) clearTimeout(statusReset); if (quotaRefresh !== undefined) clearTimeout(quotaRefresh); clearInterval(accountRefresh); } },
+      { dispose: () => { if (statusReset !== undefined) clearTimeout(statusReset); if (quotaRefresh !== undefined) clearTimeout(quotaRefresh); if (qualityConsentTimer !== undefined) clearTimeout(qualityConsentTimer); clearInterval(accountRefresh); } },
       { dispose: () => requests.dispose() },
       lifecycle.start(),
       lifecycle.onDidChangeState((state) => statusBar.update(state)),
