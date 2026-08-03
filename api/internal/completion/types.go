@@ -1,11 +1,19 @@
 package completion
 
+type CodeStyle struct {
+	Indentation string `json:"indentation"`
+	IndentSize  int    `json:"indentSize,omitempty"`
+	Quote       string `json:"quote,omitempty"`
+	Semicolons  string `json:"semicolons,omitempty"`
+}
+
 type Context struct {
-	Prefix       string `json:"prefix"`
-	Suffix       string `json:"suffix"`
-	Language     string `json:"language"`
-	FilePath     string `json:"filePath"`
-	CursorOffset int    `json:"cursorOffset"`
+	Prefix       string     `json:"prefix"`
+	Suffix       string     `json:"suffix"`
+	Language     string     `json:"language"`
+	FilePath     string     `json:"filePath"`
+	CursorOffset int        `json:"cursorOffset"`
+	Style        *CodeStyle `json:"style,omitempty"`
 }
 
 type Client struct {
@@ -27,12 +35,19 @@ type RepositorySymbol struct {
 	Signature string `json:"signature,omitempty"`
 }
 
+type SignatureHelp struct {
+	Label           string `json:"label"`
+	ActiveParameter int    `json:"activeParameter,omitempty"`
+	Parameter       string `json:"parameter,omitempty"`
+}
+
 type RepositoryContext struct {
-	Files        []RepositoryContextFile `json:"files"`
-	Symbols      []RepositorySymbol      `json:"symbols,omitempty"`
-	Dependencies []string                `json:"dependencies,omitempty"`
-	Focus        string                  `json:"focus,omitempty"`
-	Diagnostics  []string                `json:"diagnostics,omitempty"`
+	Files         []RepositoryContextFile `json:"files"`
+	Symbols       []RepositorySymbol      `json:"symbols,omitempty"`
+	Dependencies  []string                `json:"dependencies,omitempty"`
+	Focus         string                  `json:"focus,omitempty"`
+	Diagnostics   []string                `json:"diagnostics,omitempty"`
+	SignatureHelp *SignatureHelp          `json:"signatureHelp,omitempty"`
 }
 
 type Request struct {

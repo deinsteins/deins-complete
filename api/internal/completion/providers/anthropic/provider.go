@@ -11,6 +11,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -101,8 +102,8 @@ func (p *Provider) Complete(ctx context.Context, req completion.Request) (comple
 const systemPrompt = "You are a code completion engine. Return only code inserted at the cursor. Do not explain, use Markdown, or repeat surrounding code. Prefer the smallest useful completion."
 
 func userPrompt(r completion.Request) string {
-	prompt := "File: " + completion.SafeFileName(r.Context.FilePath) + "\nLanguage: " + r.Context.Language + "\nCompletion intent: " + r.Intent + "\nIntent guidance: " + completion.IntentInstruction(r.Intent) + "\n\n<PREFIX>\n" + r.Context.Prefix + "\n</PREFIX>\n\n<SUFFIX>\n" + r.Context.Suffix + "\n</SUFFIX>"
-	if r.RepositoryContext != nil && (len(r.RepositoryContext.Files) > 0 || len(r.RepositoryContext.Dependencies) > 0 || len(r.RepositoryContext.Symbols) > 0 || r.RepositoryContext.Focus != "") {
+	prompt := "File: " + completion.SafeFileName(r.Context.FilePath) + "\nLanguage: " + r.Context.Language + "\nCompletion intent: " + r.Intent + "\nIntent guidance: " + completion.IntentInstruction(r.Intent) + "\nCode style: " + completion.StyleInstruction(r.Context.Style) + "\n\n<PREFIX>\n" + r.Context.Prefix + "\n</PREFIX>\n\n<SUFFIX>\n" + r.Context.Suffix + "\n</SUFFIX>"
+	if r.RepositoryContext != nil && (len(r.RepositoryContext.Files) > 0 || len(r.RepositoryContext.Dependencies) > 0 || len(r.RepositoryContext.Symbols) > 0 || r.RepositoryContext.Focus != "" || r.RepositoryContext.SignatureHelp != nil) {
 		prompt += "\n\n<REPOSITORY_CONTEXT>"
 		if r.RepositoryContext.Focus != "" {
 			prompt += "\n<COMPLETION_FOCUS>" + r.RepositoryContext.Focus + "</COMPLETION_FOCUS>"
@@ -112,6 +113,9 @@ func userPrompt(r completion.Request) string {
 		}
 		if len(r.RepositoryContext.Dependencies) > 0 {
 			prompt += "\n<DEPENDENCIES>" + strings.Join(r.RepositoryContext.Dependencies, ", ") + "</DEPENDENCIES>"
+		}
+		if signature := r.RepositoryContext.SignatureHelp; signature != nil {
+			prompt += "\n<SIGNATURE_HELP>\nLabel: " + signature.Label + "\nActive parameter: " + strconv.Itoa(signature.ActiveParameter) + "\nParameter: " + signature.Parameter + "\n</SIGNATURE_HELP>"
 		}
 		for _, file := range r.RepositoryContext.Files {
 			prompt += "\n<FILE path=\"" + file.Path + "\" language=\"" + file.Language + "\">\n" + file.Content + "\n</FILE>"

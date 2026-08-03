@@ -110,3 +110,13 @@ func TestIntentGuidesPromptAndBoundsOutputTokens(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestPromptIncludesStyleAndSignatureHelp(t *testing.T) {
+	request := req()
+	request.Context.Style = &completion.CodeStyle{Indentation: "tabs", Quote: "double", Semicolons: "never"}
+	request.RepositoryContext = &completion.RepositoryContext{SignatureHelp: &completion.SignatureHelp{Label: "createOrder(input: OrderInput)", Parameter: "input: OrderInput"}}
+	prompt := userPrompt(request)
+	if !strings.Contains(prompt, "indentation=tabs") || !strings.Contains(prompt, "createOrder(input: OrderInput)") {
+		t.Fatalf("compiler guidance missing: %q", prompt)
+	}
+}

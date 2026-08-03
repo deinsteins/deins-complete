@@ -105,6 +105,7 @@ export function toApiCompletionRequest(request: CompletionRequest, version: stri
       language: request.language,
       filePath: request.safeFilePath,
       cursorOffset: request.cursorOffset,
+      ...(request.style !== undefined ? { style: request.style } : {}),
     },
     ...(request.intent !== undefined ? { intent: request.intent } : {}),
     client: { name: "deinscomplete-vscode", version },
@@ -122,6 +123,7 @@ export function toApiCompletionRequest(request: CompletionRequest, version: stri
       ...(request.repositoryContext.dependencies !== undefined ? { dependencies: request.repositoryContext.dependencies } : {}),
       ...(request.repositoryContext.focus !== undefined ? { focus: request.repositoryContext.focus } : {}),
       ...(request.repositoryContext.diagnostics !== undefined ? { diagnostics: request.repositoryContext.diagnostics } : {}),
+      ...(request.repositoryContext.signatureHelp !== undefined ? { signatureHelp: request.repositoryContext.signatureHelp } : {}),
     };
   }
   return apiRequest;

@@ -141,9 +141,10 @@ func TestPromptAndBaseURLNormalization(t *testing.T) {
 
 func TestPromptIncludesRepositoryContext(t *testing.T) {
 	request := testRequest()
-	request.RepositoryContext = &completion.RepositoryContext{Files: []completion.RepositoryContextFile{{Path: "src/types/user.ts", Language: "typescript", Content: "export interface User { ID string }", Reason: "import"}}, Dependencies: []string{"antd"}, Focus: "component-props", Symbols: []completion.RepositorySymbol{{Name: "Button", Kind: "library-symbol", FilePath: "package:antd", Signature: "Button from antd"}}}
+	request.Context.Style = &completion.CodeStyle{Indentation: "spaces", IndentSize: 2, Quote: "single", Semicolons: "always"}
+	request.RepositoryContext = &completion.RepositoryContext{Files: []completion.RepositoryContextFile{{Path: "src/types/user.ts", Language: "typescript", Content: "export interface User { ID string }", Reason: "import"}}, Dependencies: []string{"antd"}, Focus: "component-props", Symbols: []completion.RepositorySymbol{{Name: "Button", Kind: "library-symbol", FilePath: "package:antd", Signature: "Button from antd"}}, SignatureHelp: &completion.SignatureHelp{Label: "createUser(input: UserInput)", Parameter: "input: UserInput"}}
 	messages := BuildMessages(request)
-	if !strings.Contains(messages[1].Content, "src/types/user.ts") || !strings.Contains(messages[1].Content, "export interface User") || !strings.Contains(messages[1].Content, "antd") || !strings.Contains(messages[1].Content, "Button from antd") || !strings.Contains(messages[1].Content, "component-props") {
+	if !strings.Contains(messages[1].Content, "src/types/user.ts") || !strings.Contains(messages[1].Content, "export interface User") || !strings.Contains(messages[1].Content, "antd") || !strings.Contains(messages[1].Content, "Button from antd") || !strings.Contains(messages[1].Content, "component-props") || !strings.Contains(messages[1].Content, "createUser(input: UserInput)") || !strings.Contains(messages[1].Content, "indent-size=2") {
 		t.Fatal("repository context missing from prompt")
 	}
 }

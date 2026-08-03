@@ -10,6 +10,19 @@ export interface CompletionContextMetadata {
   buildDurationMilliseconds: number;
 }
 
+export interface CodeStyle {
+  indentation: "tabs" | "spaces";
+  indentSize?: number;
+  quote?: "single" | "double";
+  semicolons?: "always" | "never";
+}
+
+export interface SignatureHelpContext {
+  label: string;
+  activeParameter?: number;
+  parameter?: string;
+}
+
 export interface CompletionContext {
   prefix: string;
   suffix: string;
@@ -23,6 +36,7 @@ export interface CompletionContext {
   textAfterCursorOnLine: string;
   indentation: string;
   imports?: string;
+  style?: CodeStyle;
   metadata: CompletionContextMetadata;
 }
 
@@ -50,6 +64,7 @@ export interface RepositoryContext {
   dependencies?: string[];
   focus?: string;
   diagnostics?: string[];
+  signatureHelp?: SignatureHelpContext;
   fingerprint: string;
   durationMs: number;
   timedOut: boolean;

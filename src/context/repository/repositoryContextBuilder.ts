@@ -7,6 +7,7 @@ import { relevantDependencies } from "./dependencyContext";
 import { tsconfigAliasTargets } from "./projectConfig";
 import { CompletionFocus, completionFocus } from "../../completion/contextComplexity";
 import { declarationEntry, extractDeclarationSymbols, packageRoot } from "./libraryDeclarations";
+import { compactSignatureHelp, identifiersForDefinition } from "./compilerSignals";
 
 const maxFileBytes = 1024 * 1024;
 const perFileCharacters = 3000;
@@ -17,6 +18,7 @@ const sensitiveExtensions = /\.(pem|key|p12|pfx)$/i;
 type ImportReference = { specifier: string; names: string[] };
 type Candidate = { uri: vscode.Uri; reason: RepositoryContextReason; names: string[]; score: number };
 type CachedText = { text: string; version?: number };
+type CompilerSignals = { definitions: Candidate[]; signatureHelp?: RepositoryContext["signatureHelp"] };
 
 /** Lightweight workspace signals only: imports and already-open/recent documents. */
 export class RepositoryContextBuilder {
@@ -24,6 +26,7 @@ export class RepositoryContextBuilder {
   private readonly cache = new Map<string, CachedText>();
   private readonly dependencyCache = new Map<string, CachedText>();
   private readonly tsconfigCache = new Map<string, CachedText>();
+  private readonly compilerCache = new Map<string, Promise<CompilerSignals>>();
   private readonly stats = { requests: 0, success: 0, partial: 0, timedOut: 0, filesIncluded: 0, totalDurationMs: 0, lastFiles: 0, lastCharacters: 0, lastDurationMs: 0, lastFocus: "general", lastDependencies: 0 };
 
   constructor(private readonly settings: RepositoryContextSettings) {}
@@ -37,6 +40,7 @@ export class RepositoryContextBuilder {
 
   invalidate(uri: vscode.Uri): void {
     this.cache.delete(uri.toString());
+    for (const key of this.compilerCache.keys()) if (key.startsWith(`${uri.toString()}:`)) this.compilerCache.delete(key);
     if (path.posix.basename(uri.path) === "package.json") this.dependencyCache.delete(uri.toString());
     if (path.posix.basename(uri.path) === "tsconfig.json") this.tsconfigCache.delete(uri.toString());
   }
@@ -51,6 +55,7 @@ export class RepositoryContextBuilder {
     const expired = () => signal.aborted || performance.now() >= deadline;
     this.record(document);
     const candidates = new Map<string, Candidate>();
+    const compilerTask = this.compilerSignals(document, current, deadline);
     const dependencies = await this.readDependencies(document);
     const add = (candidate: Candidate) => {
       if (candidate.uri.toString() === document.uri.toString() || !this.isEligible(candidate.uri)) return;
@@ -63,6 +68,8 @@ export class RepositoryContextBuilder {
       const uri = await this.resolveImport(document.uri, reference.specifier);
       if (uri !== undefined) add({ uri, reason: "import", names: reference.names, score: 110 });
     }
+    const compiler = await compilerTask;
+    for (const definition of compiler.definitions) add(definition);
     if (dependencies.includes("tailwindcss")) {
       const config = await this.findWorkspaceFile(document.uri, ["tailwind.config.ts", "tailwind.config.js", "tailwind.config.cjs", "tailwind.config.mjs"]);
       if (config !== undefined) add({ uri: config, reason: "framework-config", names: ["theme", "colors", "extend"], score: 100 });
@@ -97,7 +104,7 @@ export class RepositoryContextBuilder {
     if (!expired()) symbols.push(...await this.librarySymbols(document, current, focus, deadline));
     if (signal.aborted) return undefined;
     const boundedSymbols = dedupeSymbols(symbols).slice(0, 20);
-    const fingerprint = createHash("sha256").update(files.map((file) => `${file.path}\0${file.content}`).join("\0")).update("\0").update(dependencies.join("\0")).update("\0").update(boundedSymbols.map((symbol) => `${symbol.filePath}\0${symbol.name}\0${symbol.signature ?? ""}`).join("\0")).digest("hex");
+    const fingerprint = createHash("sha256").update(files.map((file) => `${file.path}\0${file.content}`).join("\0")).update("\0").update(dependencies.join("\0")).update("\0").update(boundedSymbols.map((symbol) => `${symbol.filePath}\0${symbol.name}\0${symbol.signature ?? ""}`).join("\0")).update("\0").update(compiler.signatureHelp?.label ?? "").update("\0").update(String(compiler.signatureHelp?.activeParameter ?? "")).update("\0").update(compiler.signatureHelp?.parameter ?? "").digest("hex");
     const durationMs = Math.round(performance.now() - started);
     const timedOut = durationMs >= limits.timeoutMs;
     this.stats.success++;
@@ -108,7 +115,32 @@ export class RepositoryContextBuilder {
     this.stats.lastDurationMs = durationMs;
     if (timedOut) this.stats.timedOut++;
     if (timedOut || files.length < candidates.size) this.stats.partial++;
-    return { files, symbols: boundedSymbols, dependencies, focus, diagnostics, fingerprint, durationMs, timedOut };
+    return { files, symbols: boundedSymbols, dependencies, focus, diagnostics, signatureHelp: compiler.signatureHelp, fingerprint, durationMs, timedOut };
+  }
+
+  private compilerSignals(document: vscode.TextDocument, current: CompletionContext, deadline: number): Promise<CompilerSignals> {
+    const key = `${document.uri.toString()}:${document.version}:${current.cursorOffset}`;
+    const cached = this.compilerCache.get(key);
+    if (cached !== undefined) return cached;
+    const task = this.resolveCompilerSignals(document, current, deadline);
+    this.compilerCache.set(key, task);
+    while (this.compilerCache.size > 40) this.compilerCache.delete(this.compilerCache.keys().next().value as string);
+    return task;
+  }
+
+  private async resolveCompilerSignals(document: vscode.TextDocument, current: CompletionContext, deadline: number): Promise<CompilerSignals> {
+    const positions = identifiersForDefinition(current);
+    const jobs = positions.flatMap(({ name, offset }) => ["vscode.executeDefinitionProvider", "vscode.executeTypeDefinitionProvider"].map(async (command) => {
+      const remaining = Math.min(15, Math.max(0, deadline - performance.now()));
+      if (remaining === 0) return [];
+      const locations = await beforeDeadline(vscode.commands.executeCommand<Array<vscode.Location | vscode.LocationLink>>(command, document.uri, document.positionAt(offset)), remaining);
+      return (locations ?? []).slice(0, 2).map((location) => ({ uri: definitionUri(location), reason: "symbol-reference" as const, names: [name], score: command.endsWith("TypeDefinitionProvider") ? 125 : 130 }));
+    }));
+    const signatureTask = completionFocus(current) === "function-arguments"
+      ? beforeDeadline(vscode.commands.executeCommand<vscode.SignatureHelp>("vscode.executeSignatureHelpProvider", document.uri, document.positionAt(current.cursorOffset)), Math.min(15, Math.max(0, deadline - performance.now())))
+      : Promise.resolve(undefined);
+    const [definitionGroups, signature] = await Promise.all([Promise.all(jobs), signatureTask]);
+    return { definitions: definitionGroups.flat(), signatureHelp: compactSignatureHelp(signature) };
   }
 
   private async readDependencies(document: vscode.TextDocument): Promise<string[]> {
@@ -296,6 +328,7 @@ function escapeRegExp(value: string): string { return value.replace(/[.*+?^${}()
 function hoverContent(value: vscode.MarkedString | vscode.MarkdownString): string { return typeof value === "string" ? value : "language" in value ? `${value.language} ${value.value}` : value.value; }
 function completionLabel(item: vscode.CompletionItem): string { return typeof item.label === "string" ? item.label : item.label.label; }
 function completionKind(kind: vscode.CompletionItemKind | undefined): string { return kind === vscode.CompletionItemKind.Method ? "method" : kind === vscode.CompletionItemKind.Property || kind === vscode.CompletionItemKind.Field ? "property" : "member"; }
+function definitionUri(location: vscode.Location | vscode.LocationLink): vscode.Uri { return "targetUri" in location ? location.targetUri : location.uri; }
 async function beforeDeadline<T>(action: Thenable<T>, milliseconds: number): Promise<T | undefined> {
   let timer: ReturnType<typeof setTimeout> | undefined;
   try { return await Promise.race([Promise.resolve(action).catch(() => undefined), new Promise<undefined>((resolve) => { timer = setTimeout(() => resolve(undefined), milliseconds); })]); } finally { if (timer !== undefined) clearTimeout(timer); }

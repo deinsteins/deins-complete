@@ -16,6 +16,9 @@ test("imports and imported object types use repository context", () => {
   assert.equal(completionRequestMode(context("import { use")), "full");
   assert.equal(completionRequestMode(context("const user: User = {", 'import type { User } from "./types";')), "full");
 });
+test("function arguments use compiler signature context even without an import", () => {
+  assert.equal(completionRequestMode(context("createOrder(")), "full");
+});
 test("completion focus distinguishes common completion intents", () => {
   assert.equal(completionFocus(context("<Button ")), "component-props");
   assert.equal(completionFocus(context("service.")), "member-access");

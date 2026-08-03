@@ -12,12 +12,12 @@ func BuildMessages(request completion.Request) []Message {
 	fileName := completion.SafeFileName(request.Context.FilePath)
 	return []Message{
 		{Role: "system", Content: systemInstruction},
-		{Role: "user", Content: fmt.Sprintf("File: %s\nLanguage: %s\nCompletion intent: %s\nIntent guidance: %s\n\n<PREFIX>\n%s\n</PREFIX>\n\n<SUFFIX>\n%s\n</SUFFIX>%s\n\nReturn only the code inserted between PREFIX and SUFFIX.", fileName, request.Context.Language, request.Intent, completion.IntentInstruction(request.Intent), request.Context.Prefix, request.Context.Suffix, repositoryPrompt(request))},
+		{Role: "user", Content: fmt.Sprintf("File: %s\nLanguage: %s\nCompletion intent: %s\nIntent guidance: %s\nCode style: %s\n\n<PREFIX>\n%s\n</PREFIX>\n\n<SUFFIX>\n%s\n</SUFFIX>%s\n\nReturn only the code inserted between PREFIX and SUFFIX.", fileName, request.Context.Language, request.Intent, completion.IntentInstruction(request.Intent), completion.StyleInstruction(request.Context.Style), request.Context.Prefix, request.Context.Suffix, repositoryPrompt(request))},
 	}
 }
 
 func repositoryPrompt(request completion.Request) string {
-	if request.RepositoryContext == nil || (len(request.RepositoryContext.Files) == 0 && len(request.RepositoryContext.Dependencies) == 0 && len(request.RepositoryContext.Symbols) == 0 && request.RepositoryContext.Focus == "") {
+	if request.RepositoryContext == nil || (len(request.RepositoryContext.Files) == 0 && len(request.RepositoryContext.Dependencies) == 0 && len(request.RepositoryContext.Symbols) == 0 && request.RepositoryContext.Focus == "" && request.RepositoryContext.SignatureHelp == nil) {
 		return ""
 	}
 	text := "\n\n<REPOSITORY_CONTEXT>"
@@ -29,6 +29,9 @@ func repositoryPrompt(request completion.Request) string {
 	}
 	if len(request.RepositoryContext.Dependencies) > 0 {
 		text += fmt.Sprintf("\n<DEPENDENCIES>%v</DEPENDENCIES>", request.RepositoryContext.Dependencies)
+	}
+	if signature := request.RepositoryContext.SignatureHelp; signature != nil {
+		text += fmt.Sprintf("\n<SIGNATURE_HELP>\nLabel: %s\nActive parameter: %d\nParameter: %s\n</SIGNATURE_HELP>", signature.Label, signature.ActiveParameter, signature.Parameter)
 	}
 	for _, file := range request.RepositoryContext.Files {
 		text += fmt.Sprintf("\n<FILE path=%q language=%q reason=%q>\n%s\n</FILE>", file.Path, file.Language, file.Reason, file.Content)

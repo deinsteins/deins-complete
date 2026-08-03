@@ -22,6 +22,9 @@ func Validate(request Request) error {
 		len(context.Prefix) > MaxPrefixCharacters || len(context.Suffix) > MaxSuffixCharacters || context.CursorOffset < 0 || !ValidIntent(request.Intent) {
 		return ErrInvalidRequest
 	}
+	if style := context.Style; style != nil && ((style.Indentation != "tabs" && style.Indentation != "spaces") || style.IndentSize < 0 || style.IndentSize > 8 || (style.Quote != "" && style.Quote != "single" && style.Quote != "double") || (style.Semicolons != "" && style.Semicolons != "always" && style.Semicolons != "never")) {
+		return ErrInvalidRequest
+	}
 	if request.Client != nil && (len(request.Client.Name) > MaxClientFieldLength || len(request.Client.Version) > MaxClientFieldLength) {
 		return ErrInvalidRequest
 	}
@@ -59,6 +62,9 @@ func Validate(request Request) error {
 			if diagnostic == "" || len(diagnostic) > 300 {
 				return ErrInvalidRequest
 			}
+		}
+		if signature := repository.SignatureHelp; signature != nil && (signature.Label == "" || len(signature.Label) > 500 || signature.ActiveParameter < 0 || signature.ActiveParameter > 100 || len(signature.Parameter) > 200) {
+			return ErrInvalidRequest
 		}
 	}
 	return nil

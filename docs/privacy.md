@@ -2,6 +2,8 @@
 
 DeinsComplete sends bounded current-file context and, when enabled, small relevant workspace snippets to the managed backend so an AI provider can generate an inline completion. Repository context can be disabled per workspace.
 
+When repository context is enabled, the extension may also use VS Code's definition, type-definition, and signature-help providers for identifiers near the cursor. Only bounded workspace-relative snippets and compact signatures are sent. The extension also sends categorical local style hints such as tabs versus spaces, indent size, quote preference, and semicolon preference; it does not send an additional copy of the file to infer these hints.
+
 ## Optional quality insights
 
 `deinscomplete.qualityInsights.enabled` is **off by default**. The extension offers a one-time consent prompt; dismissing or declining it prevents repeated notifications. When a tester explicitly enables it and the operator enables `QUALITY_EVENTS_ENABLED`, the extension sends only:

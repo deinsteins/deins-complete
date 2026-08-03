@@ -6,6 +6,7 @@ export interface ApiCompletionRequest {
     language: string;
     filePath: string;
     cursorOffset: number;
+    style?: { indentation: "tabs" | "spaces"; indentSize?: number; quote?: "single" | "double"; semicolons?: "always" | "never" };
   };
   intent?: string;
   repositoryContext?: {
@@ -14,6 +15,7 @@ export interface ApiCompletionRequest {
     dependencies?: string[];
     focus?: string;
     diagnostics?: string[];
+    signatureHelp?: { label: string; activeParameter?: number; parameter?: string };
   };
   client: {
     name: "deinscomplete-vscode";

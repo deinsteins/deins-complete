@@ -3,6 +3,7 @@ import { ContextLimitsProvider } from "./contextConfig";
 import { CompletionContext } from "./contextTypes";
 import { ApproximateTokenEstimator, TokenEstimator } from "./tokenEstimator";
 import { takePrefixWindow, takeSuffixWindow } from "./textWindow";
+import { inferCodeStyle } from "./codeStyle";
 
 export class ContextBuilder {
   constructor(
@@ -35,6 +36,7 @@ export class ContextBuilder {
       textAfterCursorOnLine: currentLine.slice(position.character),
       indentation: currentLine.match(/^[\t ]*/)?.[0] ?? "",
       imports: preservedImports,
+      style: inferCodeStyle(documentText),
       metadata: {
         totalDocumentCharacters: documentText.length,
         prefixCharacters: prefixWindow.text.length,

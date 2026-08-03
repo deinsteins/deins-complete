@@ -18,7 +18,7 @@ export type CompletionFocus = CompletionIntent;
 // Full context is reserved for cross-file/framework signals; syntax completion stays fast.
 export function completionRequestMode(context: CompletionContext): CompletionRequestMode {
   const focus = completionFocus(context);
-  if (focus === "tailwind-class" || focus === "import") return "full";
+  if (focus === "tailwind-class" || focus === "import" || focus === "function-arguments") return "full";
   const imports = context.imports ?? context.prefix.slice(0, 10000);
   if (imports === "") return "fast";
   const names = [...imports.matchAll(/(?:import\s+(?:type\s+)?(?:\{\s*)?([A-Za-z_$][\w$]*)|\bfrom\s+[^\n]+\s+import\s+([A-Za-z_$][\w$]*))/g)]

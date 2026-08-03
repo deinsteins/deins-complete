@@ -1,5 +1,10 @@
 package completion
 
+import (
+	"strconv"
+	"strings"
+)
+
 var validIntents = map[string]bool{
 	"": true, "component-props": true, "member-access": true, "function-arguments": true,
 	"tailwind-class": true, "object-fields": true, "import": true, "function-body": true,
@@ -31,6 +36,23 @@ func IntentInstruction(intent string) string {
 	default:
 		return "Prefer the smallest useful continuation consistent with the surrounding code."
 	}
+}
+
+func StyleInstruction(style *CodeStyle) string {
+	if style == nil {
+		return "Follow the formatting visible around the cursor."
+	}
+	parts := []string{"indentation=" + style.Indentation}
+	if style.IndentSize > 0 {
+		parts = append(parts, "indent-size="+strconv.Itoa(style.IndentSize))
+	}
+	if style.Quote != "" {
+		parts = append(parts, "quotes="+style.Quote)
+	}
+	if style.Semicolons != "" {
+		parts = append(parts, "semicolons="+style.Semicolons)
+	}
+	return strings.Join(parts, ", ")
 }
 
 func MaxTokensForIntent(intent string, configured int) int {

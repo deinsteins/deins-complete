@@ -100,6 +100,12 @@ test("API request mapping preserves completion intent", () => {
   assert.equal(toApiCompletionRequest({ ...request, intent: "member-access" }, "0.0.1").intent, "member-access");
 });
 
+test("API request mapping preserves categorical local style", () => {
+  assert.deepEqual(toApiCompletionRequest({ ...request, style: { indentation: "spaces", indentSize: 2, quote: "single", semicolons: "always" } }, "0.0.1").context.style, {
+    indentation: "spaces", indentSize: 2, quote: "single", semicolons: "always",
+  });
+});
+
 test("API request mapping includes bounded repository context but not its cache fingerprint", () => {
   const withRepository: CompletionRequest = {
     ...request,
@@ -108,6 +114,7 @@ test("API request mapping includes bounded repository context but not its cache 
       symbols: [{ name: "User", kind: "interface", filePath: "src/types/user.ts", signature: "export interface User" }],
       dependencies: ["@mui/material"],
       focus: "component-props",
+      signatureHelp: { label: "createUser(input: UserInput): Promise<User>", activeParameter: 0, parameter: "input: UserInput" },
       fingerprint: "private-cache-key",
       durationMs: 12,
       timedOut: false,
@@ -118,6 +125,7 @@ test("API request mapping includes bounded repository context but not its cache 
     symbols: [{ name: "User", kind: "interface", filePath: "src/types/user.ts", signature: "export interface User" }],
     dependencies: ["@mui/material"],
     focus: "component-props",
+    signatureHelp: { label: "createUser(input: UserInput): Promise<User>", activeParameter: 0, parameter: "input: UserInput" },
   });
   assert.equal(JSON.stringify(toApiCompletionRequest(withRepository, "0.0.1")).includes("private-cache-key"), false);
 });

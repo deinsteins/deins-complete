@@ -2,6 +2,8 @@
 
 ## 0.1.17
 
+- Added bounded VS Code definition, type-definition, and signature-help signals for cross-file completion quality.
+- Added privacy-safe local indentation, quote, and semicolon style guidance so generated code matches the active file.
 - Added intent-aware completion policies for imports, function bodies, conditions, types, JSX props, members, arguments, object fields, and Tailwind classes.
 - Added intent-specific prompt guidance, token/line limits, and conservative wrong-language output rejection.
 - Connected the existing Helpful, Not Helpful, and Bad Suggestion commands to the opt-in privacy-safe quality pipeline.
