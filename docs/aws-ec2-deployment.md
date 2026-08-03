@@ -28,6 +28,17 @@ docker compose -f docker-compose.prod.yml up -d api caddy
 
 `postgres_data` is the account database. Back it up before schema changes; do not use `docker compose down -v` in production.
 
+## Internal admin panel
+
+The API can expose a small operator panel at `/admin`. It is disabled unless these values exist in `/app/deinscomplete/.env`:
+
+```env
+ADMIN_ENABLED=true
+ADMIN_TOKEN=<openssl rand -hex 32>
+```
+
+The panel can list users, create invite codes, change Free/Pro plans, inspect installations, and revoke installations. Do not put `ADMIN_TOKEN` in GitHub Actions, the VS Code extension, or client-side settings.
+
 Deploy an immutable image:
 
 ```bash

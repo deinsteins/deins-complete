@@ -4,6 +4,7 @@
 - [ ] Extension compile, lint, tests, and VSIX package pass.
 - [ ] Go vet, tests, race tests, build, and Docker build pass.
 - [ ] Production uses HTTPS, auth, rate limits, quotas, and strong secrets.
+- [ ] If admin panel is enabled, `ADMIN_TOKEN` is strong and stored only in production `.env`.
 - [ ] Health, readiness, smoke test, fresh install, fallback, and rollback are verified.
 - [ ] Secret scan and artifact inspection pass.
 - [ ] Previous VSIX and image tag are retained for rollback.

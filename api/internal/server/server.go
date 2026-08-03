@@ -58,9 +58,13 @@ func New(configuration config.Config, logger *slog.Logger, service *completion.S
 		}
 		accountService = account.NewService(accountRepo, accountTokens, mailer, configuration.Account.RegistrationMode, configuration.Account.RefreshTokenTTL, configuration.Account.MagicCodeTTL, monthlyTracker)
 	}
+	adminToken := ""
+	if configuration.Admin.Enabled {
+		adminToken = configuration.Admin.Token
+	}
 	return &Server{redis: redisClient, database: databasePool, httpServer: &http.Server{
 		Addr:              fmt.Sprintf("%s:%d", configuration.Host, configuration.Port),
-		Handler:           newRouter(logger, service, auth.New(configuration.Auth.Secret, configuration.Auth.Version, configuration.Auth.TokenTTL), configuration.Auth.Enabled, configuration.Streaming, rateLimit(configuration, redisClient), quota(configuration, redisClient), monthlyTracker, readiness(redisClient, databasePool), accountRepo, accountService, accountTokens, configuration.Account.Required),
+		Handler:           newRouter(logger, service, auth.New(configuration.Auth.Secret, configuration.Auth.Version, configuration.Auth.TokenTTL), configuration.Auth.Enabled, configuration.Streaming, rateLimit(configuration, redisClient), quota(configuration, redisClient), monthlyTracker, readiness(redisClient, databasePool), accountRepo, accountService, accountTokens, configuration.Account.Required, adminToken),
 		ReadHeaderTimeout: 5 * time.Second,
 		IdleTimeout:       60 * time.Second,
 		MaxHeaderBytes:    32 << 10,

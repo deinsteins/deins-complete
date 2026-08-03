@@ -33,6 +33,22 @@ test("backend completion engine maps empty completion to null", async () => {
   assert.equal(await engine.complete(request, new AbortController().signal), null);
 });
 
+test("successful backend response schedules quota refresh", async () => {
+  let refreshes = 0;
+  const engine = new BackendCompletionEngine(
+    new TestClient({ completion: { text: "await getUser();" } }),
+    "0.0.1",
+    logger,
+    undefined,
+    undefined,
+    undefined,
+    () => false,
+    () => { refreshes++; },
+  );
+  await engine.complete(request, new AbortController().signal);
+  assert.equal(refreshes, 1);
+});
+
 test("backend completion engine prefers streaming and falls back when unavailable", async () => {
   let standardCalls = 0;
   const streamClient: BackendClient = {

@@ -42,6 +42,7 @@ type Config struct {
 	Redis       RedisConfig
 	Database    DatabaseConfig
 	Account     AccountConfig
+	Admin       AdminConfig
 }
 type RouterConfig struct {
 	FallbackEnabled bool
@@ -85,6 +86,10 @@ type AccountConfig struct {
 	MagicCodeTTL                                   time.Duration
 	SMTPAddr, SMTPFrom, SMTPUsername, SMTPPassword string
 }
+type AdminConfig struct {
+	Enabled bool
+	Token   string
+}
 
 func Load() (Config, error) {
 	return parse(os.Getenv)
@@ -116,6 +121,7 @@ func parse(lookup func(string) string) (Config, error) {
 		Redis:      RedisConfig{Enabled: lookup("REDIS_ENABLED") == "true", Addr: lookup("REDIS_ADDR"), Username: lookup("REDIS_USERNAME"), Password: lookup("REDIS_PASSWORD"), TLS: lookup("REDIS_TLS_ENABLED") == "true", ConnectTimeout: 2 * time.Second, ReadTimeout: time.Second, WriteTimeout: time.Second},
 		Database:   DatabaseConfig{Enabled: lookup("DATABASE_ENABLED") == "true", URL: lookup("DATABASE_URL"), MaxOpenConns: 10, MaxIdleConns: 5, ConnMaxLifetime: 30 * time.Minute},
 		Account:    AccountConfig{Required: lookup("ACCOUNT_REQUIRED") == "true", RegistrationMode: valueOrDefault(lookup("REGISTRATION_MODE"), "invite"), AccessTokenSecret: lookup("ACCOUNT_ACCESS_TOKEN_SECRET"), AccessTokenTTL: 30 * time.Minute, RefreshTokenTTL: 30 * 24 * time.Hour, MagicCodeTTL: 15 * time.Minute, SMTPAddr: lookup("ACCOUNT_SMTP_ADDR"), SMTPFrom: lookup("ACCOUNT_SMTP_FROM"), SMTPUsername: lookup("ACCOUNT_SMTP_USERNAME"), SMTPPassword: lookup("ACCOUNT_SMTP_PASSWORD")},
+		Admin:      AdminConfig{Enabled: lookup("ADMIN_ENABLED") == "true", Token: lookup("ADMIN_TOKEN")},
 	}
 	if config.Redis.Enabled && config.Redis.Addr == "" {
 		return Config{}, fmt.Errorf("REDIS_ADDR is required when REDIS_ENABLED=true")
@@ -163,6 +169,9 @@ func parse(lookup func(string) string) (Config, error) {
 	if config.Auth.Enabled && len(config.Auth.Secret) < 32 {
 		return Config{}, fmt.Errorf("AUTH_TOKEN_SECRET must be at least 32 bytes when auth is enabled")
 	}
+	if err := parseAdminConfig(&config); err != nil {
+		return Config{}, err
+	}
 	if err := parseAdmissionConfig(&config, lookup); err != nil {
 		return Config{}, err
 	}
@@ -173,6 +182,19 @@ func parse(lookup func(string) string) (Config, error) {
 		return Config{}, err
 	}
 	return config, nil
+}
+
+func parseAdminConfig(config *Config) error {
+	if !config.Admin.Enabled {
+		return nil
+	}
+	if !config.Database.Enabled {
+		return fmt.Errorf("DATABASE_ENABLED must be true when ADMIN_ENABLED=true")
+	}
+	if len(config.Admin.Token) < 32 {
+		return fmt.Errorf("ADMIN_TOKEN must be at least 32 bytes when ADMIN_ENABLED=true")
+	}
+	return nil
 }
 
 func parseDatabaseConfig(config *Config, lookup func(string) string) error {

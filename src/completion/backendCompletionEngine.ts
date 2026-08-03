@@ -14,13 +14,14 @@ export class BackendCompletionEngine implements CompletionEngine {
     private readonly refreshAuthentication?: (signal: AbortSignal) => Promise<void>,
     private readonly onQuotaExceeded?: () => void,
     private readonly streamingEnabled: () => boolean = () => true,
+    private readonly onCompletionSucceeded?: () => void,
   ) {}
 
   async complete(request: CompletionRequest, signal: AbortSignal): Promise<CompletionResult | null> {
     try {
       await this.ensureAuthentication?.(signal);
       const response = await this.completeRequest(request, signal);
-      return response.completion.text === "" ? null : { text: response.completion.text };
+      return this.result(response.completion.text);
     } catch (error) {
       if (error instanceof AccountRequiredError) {
         this.logger.debug("Backend account sign-in required");
@@ -32,7 +33,7 @@ export class BackendCompletionEngine implements CompletionEngine {
           await this.refreshAuthentication(signal);
           if (signal.aborted) return null;
           const response = await this.completeRequest(request, signal);
-          return response.completion.text === "" ? null : { text: response.completion.text };
+          return this.result(response.completion.text);
         } catch (refreshError) {
           if (refreshError instanceof CancelledError || signal.aborted) return null;
           this.logger.debug(`Backend authentication refresh failed${safeErrorDetails(refreshError)}`);
@@ -58,6 +59,11 @@ export class BackendCompletionEngine implements CompletionEngine {
     }
   }
   getStats() { return { ...this.stats }; }
+
+  private result(text: string): CompletionResult | null {
+    this.onCompletionSucceeded?.();
+    return text === "" ? null : { text };
+  }
 
   private async completeRequest(request: CompletionRequest, signal: AbortSignal) {
     const apiRequest = toApiCompletionRequest(request, this.extensionVersion);

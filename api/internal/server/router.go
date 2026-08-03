@@ -18,7 +18,7 @@ import (
 	"deinscomplete/api/internal/usage"
 )
 
-func newRouter(logger *slog.Logger, service *completion.Service, authService *auth.Service, enabled bool, streaming bool, limiter ratelimit.Limiter, tracker usage.Tracker, monthly usage.MonthlyTracker, readiness func(context.Context) error, repo *account.Repository, accounts *account.Service, accountTokens *accountauth.Service, accountRequired bool) http.Handler {
+func newRouter(logger *slog.Logger, service *completion.Service, authService *auth.Service, enabled bool, streaming bool, limiter ratelimit.Limiter, tracker usage.Tracker, monthly usage.MonthlyTracker, readiness func(context.Context) error, repo *account.Repository, accounts *account.Service, accountTokens *accountauth.Service, accountRequired bool, adminToken string) http.Handler {
 	router := chi.NewRouter()
 	router.Use(middleware.RequestID, middleware.Recovery(logger), middleware.Logging(logger))
 	router.Get("/", handlers.Root)
@@ -41,6 +41,18 @@ func newRouter(logger *slog.Logger, service *completion.Service, authService *au
 		router.With(user).Get("/v1/account/installations", h.Installations)
 		router.With(user).Delete("/v1/account/installations/{id}", h.Revoke)
 		router.With(user, middleware.InstallationToken(authService, repo)).Post("/v1/installations/link", h.Link)
+	}
+	if repo != nil && adminToken != "" {
+		h := handlers.NewAdminHandler(repo, monthly)
+		admin := middleware.AdminAuth(adminToken)
+		router.Get("/admin", handlers.AdminPage)
+		router.With(admin).Get("/v1/admin/overview", h.Overview)
+		router.With(admin).Get("/v1/admin/users", h.Users)
+		router.With(admin).Get("/v1/admin/installations", h.Installations)
+		router.With(admin).Get("/v1/admin/invites", h.Invites)
+		router.With(admin).Post("/v1/admin/invites", h.CreateInvite)
+		router.With(admin).Post("/v1/admin/users/{id}/plan", h.SetPlan)
+		router.With(admin).Post("/v1/admin/installations/{id}/revoke", h.RevokeInstallation)
 	}
 	completionHandler := http.Handler(handlers.NewCompletionHandler(service, logger))
 	if enabled {

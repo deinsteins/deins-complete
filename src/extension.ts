@@ -61,6 +61,18 @@ export function activate(context: vscode.ExtensionContext): void {
         statusBar.setQuota({ plan: status.account.plan.code, used: limits.used, limit: limits.monthlyCompletions }, lifecycle.getState());
       } catch { /* account data is optional; keep the status bar responsive */ }
     };
+    let quotaRefresh: ReturnType<typeof setTimeout> | undefined;
+    const scheduleQuotaRefresh = (): void => {
+      if (quotaRefresh !== undefined) return;
+      quotaRefresh = setTimeout(async () => {
+        try {
+          const entitlements = await account.getEntitlements();
+          const limits = entitlements.limits;
+          statusBar.setQuota({ plan: entitlements.plan, used: limits.used, limit: limits.monthlyCompletions }, lifecycle.getState());
+        } catch { /* the periodic refresh remains the fallback */ }
+        finally { quotaRefresh = undefined; }
+      }, 1_000);
+    };
     const authenticate = async (signal: AbortSignal): Promise<void> => {
       await installation.ensureRegistered(signal);
     };
@@ -80,7 +92,7 @@ export function activate(context: vscode.ExtensionContext): void {
     let quotaNotified = false;
     const engine = new BackendCompletionEngine(backendClient, extensionVersion, logger, authenticate, refreshAuthentication, () => {
       if (!quotaNotified) { quotaNotified = true; void vscode.window.showWarningMessage("DeinsComplete daily completion limit reached."); }
-    }, () => config.streamingEnabled());
+    }, () => config.streamingEnabled(), scheduleQuotaRefresh);
     let statusReset: ReturnType<typeof setTimeout> | undefined;
     const requests = new RequestManager(engine, config, (activity) => {
       if (statusReset !== undefined) clearTimeout(statusReset);
@@ -107,7 +119,7 @@ export function activate(context: vscode.ExtensionContext): void {
 
     context.subscriptions.push(
       statusBar,
-      { dispose: () => { if (statusReset !== undefined) clearTimeout(statusReset); clearInterval(accountRefresh); } },
+      { dispose: () => { if (statusReset !== undefined) clearTimeout(statusReset); if (quotaRefresh !== undefined) clearTimeout(quotaRefresh); clearInterval(accountRefresh); } },
       { dispose: () => requests.dispose() },
       lifecycle.start(),
       lifecycle.onDidChangeState((state) => statusBar.update(state)),

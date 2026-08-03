@@ -68,6 +68,24 @@ type MagicCode struct {
 	ExpiresAt, CreatedAt           time.Time
 	ConsumedAt                     *time.Time
 }
+type AdminSummary struct {
+	Users, LinkedInstallations, ActiveInstallations, PendingInvites int
+}
+type AdminUser struct {
+	ID, Email, Status, Plan string
+	CreatedAt               time.Time
+	Installations           int
+	LastSeenAt              *time.Time
+}
+type AdminInstallation struct {
+	ID, UserID, Email, Status string
+	CreatedAt, LastSeenAt     time.Time
+}
+type AdminInvite struct {
+	ID, Email            string
+	ExpiresAt, CreatedAt time.Time
+	UsedAt               *time.Time
+}
 
 func NormalizeEmail(email string) string { return strings.ToLower(strings.TrimSpace(email)) }
 
@@ -317,6 +335,97 @@ func scanEntitlements(row pgx.Row) (Entitlements, error) {
 }
 func (r *Repository) SetUserPlan(ctx context.Context, userID, planCode string) error {
 	tag, err := r.pool.Exec(ctx, `INSERT INTO user_entitlements(user_id,plan_id) SELECT $1,id FROM plans WHERE code=$2 AND status='active' ON CONFLICT (user_id) DO UPDATE SET plan_id=EXCLUDED.plan_id,updated_at=now()`, userID, planCode)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+func (r *Repository) AdminSummary(ctx context.Context) (AdminSummary, error) {
+	var s AdminSummary
+	err := r.pool.QueryRow(ctx, `SELECT
+		(SELECT count(*) FROM users),
+		(SELECT count(*) FROM installations WHERE user_id IS NOT NULL),
+		(SELECT count(*) FROM installations WHERE status='active'),
+		(SELECT count(*) FROM invites WHERE used_at IS NULL AND expires_at > now())`).Scan(&s.Users, &s.LinkedInstallations, &s.ActiveInstallations, &s.PendingInvites)
+	return s, err
+}
+func (r *Repository) AdminListUsers(ctx context.Context, query string, limit int) ([]AdminUser, error) {
+	if limit < 1 || limit > 200 {
+		limit = 100
+	}
+	query = "%" + NormalizeEmail(query) + "%"
+	rows, err := r.pool.Query(ctx, `SELECT u.id::text,u.email,u.status,COALESCE(p.code,'free'),u.created_at,count(i.id)::int,max(i.last_seen_at)
+		FROM users u
+		LEFT JOIN user_entitlements e ON e.user_id=u.id
+		LEFT JOIN plans p ON p.id=e.plan_id
+		LEFT JOIN installations i ON i.user_id=u.id
+		WHERE lower(u.email) LIKE $1
+		GROUP BY u.id,u.email,u.status,p.code,u.created_at
+		ORDER BY max(i.last_seen_at) DESC NULLS LAST,u.created_at DESC
+		LIMIT $2`, query, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var users []AdminUser
+	for rows.Next() {
+		var u AdminUser
+		if err := rows.Scan(&u.ID, &u.Email, &u.Status, &u.Plan, &u.CreatedAt, &u.Installations, &u.LastSeenAt); err != nil {
+			return nil, err
+		}
+		users = append(users, u)
+	}
+	return users, rows.Err()
+}
+func (r *Repository) AdminListInstallations(ctx context.Context, userID string, limit int) ([]AdminInstallation, error) {
+	if limit < 1 || limit > 200 {
+		limit = 100
+	}
+	rows, err := r.pool.Query(ctx, `SELECT i.id::text,COALESCE(i.user_id::text,''),COALESCE(u.email,''),i.status,i.created_at,i.last_seen_at
+		FROM installations i
+		LEFT JOIN users u ON u.id=i.user_id
+		WHERE ($1='' OR i.user_id::text=$1)
+		ORDER BY i.last_seen_at DESC
+		LIMIT $2`, userID, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var result []AdminInstallation
+	for rows.Next() {
+		var i AdminInstallation
+		if err := rows.Scan(&i.ID, &i.UserID, &i.Email, &i.Status, &i.CreatedAt, &i.LastSeenAt); err != nil {
+			return nil, err
+		}
+		result = append(result, i)
+	}
+	return result, rows.Err()
+}
+func (r *Repository) AdminListInvites(ctx context.Context, limit int) ([]AdminInvite, error) {
+	if limit < 1 || limit > 200 {
+		limit = 100
+	}
+	rows, err := r.pool.Query(ctx, `SELECT id::text,COALESCE(email_normalized,''),expires_at,used_at,created_at FROM invites ORDER BY created_at DESC LIMIT $1`, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var result []AdminInvite
+	for rows.Next() {
+		var invite AdminInvite
+		if err := rows.Scan(&invite.ID, &invite.Email, &invite.ExpiresAt, &invite.UsedAt, &invite.CreatedAt); err != nil {
+			return nil, err
+		}
+		result = append(result, invite)
+	}
+	return result, rows.Err()
+}
+func (r *Repository) AdminRevokeInstallation(ctx context.Context, installationID string) error {
+	tag, err := r.pool.Exec(ctx, `UPDATE installations SET status='revoked',updated_at=now() WHERE id=$1 AND status='active'`, installationID)
 	if err != nil {
 		return err
 	}

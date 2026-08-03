@@ -146,3 +146,21 @@ func TestParseRejectsIncompleteDatabaseAccountConfiguration(t *testing.T) {
 		t.Fatal("expected database configuration error")
 	}
 }
+
+func TestParseAdminConfiguration(t *testing.T) {
+	values := map[string]string{
+		"DATABASE_ENABLED":            "true",
+		"DATABASE_URL":                "postgres://user:password@localhost/deinscomplete",
+		"ACCOUNT_ACCESS_TOKEN_SECRET": "01234567890123456789012345678901",
+		"ADMIN_ENABLED":               "true",
+		"ADMIN_TOKEN":                 "admin-token-must-be-at-least-32-bytes",
+	}
+	configuration, err := parse(func(key string) string { return values[key] })
+	if err != nil || !configuration.Admin.Enabled {
+		t.Fatalf("unexpected admin configuration: %#v %v", configuration.Admin, err)
+	}
+	values["ADMIN_TOKEN"] = "short"
+	if _, err := parse(func(key string) string { return values[key] }); err == nil {
+		t.Fatal("expected weak admin token error")
+	}
+}
