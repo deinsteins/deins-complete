@@ -9,8 +9,12 @@ test("simple syntax uses the fast completion path", () => assert.equal(completio
 test("imported member access uses the full completion path", () => assert.equal(completionRequestMode(context("userService.", 'import { userService } from "./user";')), "full"));
 test("imports retained in the prefix also use the full completion path", () => assert.equal(completionRequestMode({ ...context('import { userService } from "./user";\nuserService.'), imports: undefined }), "full"));
 test("JSX and Tailwind class editing use the full completion path", () => {
-  assert.equal(completionRequestMode(context("<Button", 'import { Button } from "antd";')), "full");
+  assert.equal(completionRequestMode(context("<Button ", 'import { Button } from "antd";')), "full");
   assert.equal(completionRequestMode(context('className="')), "full");
+});
+test("bare JSX tags and intrinsic element props stay on the fast path", () => {
+  assert.equal(completionRequestMode(context("<Button", 'import { Button } from "antd";')), "fast");
+  assert.equal(completionRequestMode(context("<button disabled")), "fast");
 });
 test("imports and imported object types use repository context", () => {
   assert.equal(completionRequestMode(context("import { use")), "full");
@@ -21,6 +25,7 @@ test("function arguments use compiler signature context even without an import",
 });
 test("completion focus distinguishes common completion intents", () => {
   assert.equal(completionFocus(context("<Button ")), "component-props");
+  assert.equal(completionFocus(context("<button disabled")), "component-props");
   assert.equal(completionFocus(context("service.")), "member-access");
   assert.equal(completionFocus(context("createOrder(")), "function-arguments");
   assert.equal(completionFocus(context('className="')), "tailwind-class");

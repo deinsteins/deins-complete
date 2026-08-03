@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.19
+
+- Improved JSX/TSX completion frequency with React-aware triggers, fast tag/intrinsic-element paths, and exact active-request continuation reuse.
+
 ## 0.1.18
 
 - Added bounded VS Code definition, type-definition, and signature-help signals for cross-file completion quality.
