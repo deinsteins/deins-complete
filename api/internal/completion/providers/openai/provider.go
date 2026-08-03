@@ -64,7 +64,7 @@ func (provider *Provider) Complete(ctx context.Context, request completion.Reque
 	defer cancel()
 	startedAt := time.Now()
 	body, err := json.Marshal(ChatCompletionRequest{
-		Model: provider.model, Messages: BuildMessages(request), Temperature: provider.temperature, MaxTokens: provider.maxTokens, Stream: false, N: provider.candidateCount,
+		Model: provider.model, Messages: BuildMessages(request), Temperature: provider.temperature, MaxTokens: completion.MaxTokensForIntent(request.Intent, provider.maxTokens), Stream: false, N: provider.candidateCount,
 	})
 	if err != nil {
 		return completion.Result{}, completion.NewProviderError(completion.ProviderInvalidResponse, err)
@@ -138,6 +138,9 @@ func candidatePenalty(request completion.Request, text string) int {
 	if request.Context.Suffix != "" && strings.Contains(text, request.Context.Suffix[:min(80, len(request.Context.Suffix))]) {
 		score += 1000
 	}
+	if completion.SingleLineIntent(request.Intent) {
+		score += strings.Count(strings.TrimSpace(text), "\n") * 500
+	}
 	switch strings.ToLower(request.Context.Language) {
 	case "typescript", "typescriptreact", "javascript", "javascriptreact":
 		if strings.HasPrefix(lower, "def ") || strings.HasPrefix(lower, "package main") || strings.HasPrefix(lower, "func ") {
@@ -170,7 +173,7 @@ func (provider *Provider) StreamComplete(ctx context.Context, request completion
 	}
 	ctx, cancel := context.WithTimeout(ctx, provider.timeout)
 	defer cancel()
-	body, err := json.Marshal(ChatCompletionRequest{Model: provider.model, Messages: BuildMessages(request), Temperature: provider.temperature, MaxTokens: provider.maxTokens, Stream: true})
+	body, err := json.Marshal(ChatCompletionRequest{Model: provider.model, Messages: BuildMessages(request), Temperature: provider.temperature, MaxTokens: completion.MaxTokensForIntent(request.Intent, provider.maxTokens), Stream: true})
 	if err != nil {
 		return completion.NewProviderError(completion.ProviderInvalidResponse, err)
 	}
@@ -237,7 +240,7 @@ func (provider *Provider) completeRaw(ctx context.Context, request completion.Re
 	ctx, cancel := context.WithTimeout(ctx, provider.timeout)
 	defer cancel()
 	prompt := fim.Format(request, provider.fim)
-	body, err := json.Marshal(CompletionRequest{Model: provider.model, Prompt: prompt, Temperature: provider.temperature, MaxTokens: provider.maxTokens})
+	body, err := json.Marshal(CompletionRequest{Model: provider.model, Prompt: prompt, Temperature: provider.temperature, MaxTokens: completion.MaxTokensForIntent(request.Intent, provider.maxTokens)})
 	if err != nil {
 		return completion.Result{}, completion.NewProviderError(completion.ProviderInvalidResponse, err)
 	}

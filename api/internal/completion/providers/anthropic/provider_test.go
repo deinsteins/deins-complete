@@ -87,3 +87,26 @@ func TestURLNormalization(t *testing.T) {
 		}
 	}
 }
+
+func TestIntentGuidesPromptAndBoundsOutputTokens(t *testing.T) {
+	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body requestBody
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatal(err)
+		}
+		if body.MaxTokens != 48 || !strings.Contains(body.Messages[0].Content, "Completion intent: member-access") {
+			t.Fatalf("intent policy missing: %#v", body)
+		}
+		_, _ = w.Write([]byte(`{"content":[{"type":"text","text":"name"}]}`))
+	}))
+	defer s.Close()
+	p, err := New(cfg(s.URL), logger())
+	if err != nil {
+		t.Fatal(err)
+	}
+	request := req()
+	request.Intent = "member-access"
+	if _, err := p.Complete(context.Background(), request); err != nil {
+		t.Fatal(err)
+	}
+}

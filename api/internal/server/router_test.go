@@ -29,7 +29,7 @@ func (providerErrorProvider) Complete(context.Context, completion.Request) (comp
 
 func testRouter() http.Handler {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	return newRouter(logger, completion.NewService(providers.MockProvider{}), auth.New("", 1, 0), false, false, nil, nil, nil, nil, nil, nil, nil, false, "", false)
+	return newRouter(logger, completion.NewService(providers.MockProvider{}), auth.New("", 1, 0), false, false, nil, nil, nil, nil, nil, nil, nil, false, "", false, 100)
 }
 
 func TestHealthAndReady(t *testing.T) {
@@ -105,7 +105,7 @@ func TestMethodNotAllowedReturnsJSON(t *testing.T) {
 
 func TestProviderErrorsUseSafeAPIResponses(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	router := newRouter(logger, completion.NewService(providerErrorProvider{}), auth.New("", 1, 0), false, false, nil, nil, nil, nil, nil, nil, nil, false, "", false)
+	router := newRouter(logger, completion.NewService(providerErrorProvider{}), auth.New("", 1, 0), false, false, nil, nil, nil, nil, nil, nil, nil, false, "", false, 100)
 	body := `{"context":{"prefix":"const user =","suffix":"","language":"typescript","filePath":"test.ts","cursorOffset":12}}`
 	response := httptest.NewRecorder()
 	router.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/v1/completions", strings.NewReader(body)))
@@ -125,7 +125,7 @@ func TestOversizedCompletionBody(t *testing.T) {
 func TestAuthenticatedCompletionAndRegistration(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	service := auth.New("01234567890123456789012345678901", 1, 0)
-	router := newRouter(logger, completion.NewService(providers.MockProvider{}), service, true, false, nil, nil, nil, nil, nil, nil, nil, false, "", false)
+	router := newRouter(logger, completion.NewService(providers.MockProvider{}), service, true, false, nil, nil, nil, nil, nil, nil, nil, false, "", false, 100)
 	registration := httptest.NewRecorder()
 	router.ServeHTTP(registration, httptest.NewRequest(http.MethodPost, "/v1/installations/register", strings.NewReader(`{"installationId":"installation-1"}`)))
 	if registration.Code != http.StatusOK {
@@ -182,6 +182,22 @@ func TestLinkedInstallationReachesCompletionAfterEntitlementResolution(t *testin
 	if _, err = repo.LinkInstallation(context.Background(), installation.ID, user.ID); err != nil {
 		t.Fatal(err)
 	}
+	qualityCompletionID := uuid.NewString()
+	for _, event := range []account.QualityEvent{
+		{ID: uuid.NewString(), CompletionID: qualityCompletionID, InstallationID: installation.ID, EventType: "shown", Language: "typescriptreact", Framework: "react", Focus: "component-props", Mode: "full", Source: "backend", ClientVersion: "0.1.17", FeedbackReason: "none", LatencyMS: 120},
+		{ID: uuid.NewString(), CompletionID: qualityCompletionID, InstallationID: installation.ID, EventType: "not-helpful", Language: "typescriptreact", Framework: "react", Focus: "component-props", Mode: "full", Source: "backend", ClientVersion: "0.1.17", FeedbackReason: "incorrect-api", LatencyMS: 120},
+	} {
+		if err := repo.RecordQualityEvent(context.Background(), event); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := repo.RecordQualityEvent(context.Background(), account.QualityEvent{
+		ID: uuid.NewString(), CompletionID: uuid.NewString(), InstallationID: installation.ID,
+		EventType: "shown", Language: "typescriptreact", Framework: "react", Focus: "component-props",
+		Mode: "full", Source: "backend", ClientVersion: "0.1.16", LatencyMS: 120,
+	}); err != nil {
+		t.Fatal(err)
+	}
 	t.Cleanup(func() {
 		_, _ = pool.Exec(context.Background(), `DELETE FROM installations WHERE id=$1`, installation.ID)
 		_, _ = pool.Exec(context.Background(), `DELETE FROM user_entitlements WHERE user_id=$1`, user.ID)
@@ -190,7 +206,7 @@ func TestLinkedInstallationReachesCompletionAfterEntitlementResolution(t *testin
 
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	authService := auth.New("01234567890123456789012345678901", 1, 0)
-	router := newRouter(logger, completion.NewService(providers.MockProvider{}), authService, true, true, nil, nil, usage.NewMonthly(), nil, repo, nil, nil, true, "", false)
+	router := newRouter(logger, completion.NewService(providers.MockProvider{}), authService, true, true, nil, nil, usage.NewMonthly(), nil, repo, nil, nil, true, "", false, 100)
 	token, err := authService.Issue(installation.InstallationKey)
 	if err != nil {
 		t.Fatal(err)
@@ -236,7 +252,7 @@ func TestAdminPanelRoutes(t *testing.T) {
 	})
 
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	router := newRouter(logger, completion.NewService(providers.MockProvider{}), auth.New("", 1, 0), false, false, nil, nil, usage.NewMonthly(), nil, repo, nil, nil, false, "admin-token-must-be-at-least-32-bytes", false)
+	router := newRouter(logger, completion.NewService(providers.MockProvider{}), auth.New("", 1, 0), false, false, nil, nil, usage.NewMonthly(), nil, repo, nil, nil, false, "admin-token-must-be-at-least-32-bytes", false, 100)
 	unauthorized := httptest.NewRecorder()
 	router.ServeHTTP(unauthorized, httptest.NewRequest(http.MethodGet, "/v1/admin/overview", nil))
 	if unauthorized.Code != http.StatusUnauthorized {
@@ -255,7 +271,7 @@ func TestAdminPanelRoutes(t *testing.T) {
 	if response := do(http.MethodGet, "/v1/admin/overview", ""); response.Code != http.StatusOK {
 		t.Fatalf("overview: %d %s", response.Code, response.Body.String())
 	}
-	if response := do(http.MethodGet, "/v1/admin/quality?days=7", ""); response.Code != http.StatusOK {
+	if response := do(http.MethodGet, "/v1/admin/quality?days=7", ""); response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"extension-version"`) || !strings.Contains(response.Body.String(), `"incorrect-api"`) || !strings.Contains(response.Body.String(), `"NotHelpful"`) {
 		t.Fatalf("quality: %d %s", response.Code, response.Body.String())
 	}
 	if response := do(http.MethodPost, "/v1/admin/invites", `{"email":"invite@example.test","days":3}`); response.Code != http.StatusCreated || !strings.Contains(response.Body.String(), `"code"`) {
@@ -292,7 +308,7 @@ func TestQualityEventsRequireInstallationAuthAndAreIdempotent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	router := newRouter(slog.New(slog.NewTextHandler(io.Discard, nil)), completion.NewService(providers.MockProvider{}), authService, true, false, nil, nil, nil, nil, repo, nil, nil, false, "", true)
+	router := newRouter(slog.New(slog.NewTextHandler(io.Discard, nil)), completion.NewService(providers.MockProvider{}), authService, true, false, nil, nil, nil, nil, repo, nil, nil, false, "", true, 100)
 	completionID, eventID := uuid.NewString(), uuid.NewString()
 	body := `{"eventId":"` + eventID + `","completionId":"` + completionID + `","type":"shown","requestId":"safe-request","language":"typescriptreact","framework":"react","focus":"component-props","mode":"full","source":"backend","latencyMs":123}`
 	missing := httptest.NewRecorder()
@@ -309,15 +325,28 @@ func TestQualityEventsRequireInstallationAuthAndAreIdempotent(t *testing.T) {
 			t.Fatalf("attempt %d: %d %s", attempt, response.Code, response.Body.String())
 		}
 	}
+	for _, feedbackBody := range []string{
+		`{"eventId":"` + uuid.NewString() + `","completionId":"` + completionID + `","type":"not-helpful","language":"typescriptreact","framework":"react","focus":"component-props","mode":"full","source":"backend","latencyMs":123,"clientVersion":"0.1.17","feedbackReason":"incorrect-api"}`,
+		`{"eventId":"` + uuid.NewString() + `","completionId":"` + completionID + `","type":"helpful","language":"typescriptreact","framework":"react","focus":"component-props","mode":"full","source":"backend","latencyMs":123,"clientVersion":"0.1.17","feedbackReason":"none"}`,
+	} {
+		request := httptest.NewRequest(http.MethodPost, "/v1/quality/events", strings.NewReader(feedbackBody))
+		request.Header.Set("Authorization", "Bearer "+token)
+		response := httptest.NewRecorder()
+		router.ServeHTTP(response, request)
+		if response.Code != http.StatusNoContent {
+			t.Fatalf("feedback: %d %s", response.Code, response.Body.String())
+		}
+	}
 	var count int
-	if err := pool.QueryRow(context.Background(), `SELECT count(*) FROM quality_events WHERE completion_id=$1`, completionID).Scan(&count); err != nil || count != 1 {
-		t.Fatalf("expected one idempotent event, count=%d err=%v", count, err)
+	var legacyCount int
+	if err := pool.QueryRow(context.Background(), `SELECT count(*),count(*) FILTER (WHERE client_version='unknown') FROM quality_events WHERE completion_id=$1`, completionID).Scan(&count, &legacyCount); err != nil || count != 2 || legacyCount != 1 {
+		t.Fatalf("expected one legacy shown and one manual feedback event, count=%d legacy=%d err=%v", count, legacyCount, err)
 	}
 }
 
 func TestStreamingCompletionEndpoint(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	router := newRouter(logger, completion.NewService(providers.MockProvider{}), auth.New("", 1, 0), false, true, nil, nil, nil, nil, nil, nil, nil, false, "", false)
+	router := newRouter(logger, completion.NewService(providers.MockProvider{}), auth.New("", 1, 0), false, true, nil, nil, nil, nil, nil, nil, nil, false, "", false, 100)
 	body := `{"context":{"prefix":"const user =","suffix":"","language":"typescript","filePath":"test.ts","cursorOffset":12}}`
 	response := httptest.NewRecorder()
 	router.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/v1/completions/stream", strings.NewReader(body)))

@@ -37,6 +37,7 @@ type RepositoryContext struct {
 
 type Request struct {
 	Context           Context            `json:"context"`
+	Intent            string             `json:"intent,omitempty"`
 	RepositoryContext *RepositoryContext `json:"repositoryContext,omitempty"`
 	Client            *Client            `json:"client,omitempty"`
 }

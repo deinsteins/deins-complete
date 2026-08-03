@@ -2,6 +2,7 @@
 
 - [ ] Quality events remain disabled unless the controlled beta explicitly needs them.
 - [ ] If enabled, retention is reviewed and the aggregate dashboard remains protected by `ADMIN_TOKEN`.
+- [ ] Sampling percentage is intentional, and trends with fewer than 20 shown events are treated as directional only.
 - [ ] Quality event storage contains no source code, completion text, file paths, repository snippets, email, or credentials.
 
 - [ ] `APP_ENV=production`, installation authentication, rate limiting, daily abuse guard, and plan quota are enabled.

@@ -102,7 +102,7 @@ export function activate(context: vscode.ExtensionContext): void {
       completionAvailability = state === "ready" ? undefined : state;
     });
     const feedback = new FeedbackService(context.workspaceState);
-    const quality = new QualityReporter(config, backendClient, logger);
+    const quality = new QualityReporter(config, backendClient, extensionVersion, logger);
     const qualityConsentKey = "deinscomplete.qualityInsights.consent.v1";
     let qualityConsentTimer: ReturnType<typeof setTimeout> | undefined;
     if (shouldOfferQualityInsights(context.globalState.get<QualityConsent>(qualityConsentKey), config.qualityInsightsConfigured(), config.qualityInsightsEnabled())) {

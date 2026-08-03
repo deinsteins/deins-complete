@@ -33,9 +33,10 @@ func TestServiceForwardsRequestContext(t *testing.T) {
 
 func TestStreamStopsAfterUsefulSingleLine(t *testing.T) {
 	service := NewService(&streamingTestProvider{})
-	request := Request{RepositoryContext: &RepositoryContext{Focus: "member-access"}}
-	result, err := service.Stream(context.Background(), request, func(string) error { return nil })
-	if err != nil || result.Text != "first line" {
-		t.Fatalf("text=%q err=%v", result.Text, err)
+	request := Request{Intent: "member-access"}
+	var streamed string
+	result, err := service.Stream(context.Background(), request, func(chunk string) error { streamed += chunk; return nil })
+	if err != nil || result.Text != "first line" || streamed != "first line" {
+		t.Fatalf("text=%q streamed=%q err=%v", result.Text, streamed, err)
 	}
 }

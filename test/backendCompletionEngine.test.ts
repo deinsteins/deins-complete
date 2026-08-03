@@ -96,6 +96,10 @@ test("API request mapping sends only contract fields and a safe path", () => {
   });
 });
 
+test("API request mapping preserves completion intent", () => {
+  assert.equal(toApiCompletionRequest({ ...request, intent: "member-access" }, "0.0.1").intent, "member-access");
+});
+
 test("API request mapping includes bounded repository context but not its cache fingerprint", () => {
   const withRepository: CompletionRequest = {
     ...request,

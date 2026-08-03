@@ -96,12 +96,13 @@ export function registerCommands(
       } catch (error) { logger.error("Account status failed", error); void vscode.window.showErrorMessage("Unable to load DeinsComplete account status."); }
     }),
     vscode.commands.registerCommand("deinscomplete.clearCompletionCache", () => { requests.clearCache(); logger.info("Completion cache cleared."); void vscode.window.showInformationMessage("DeinsComplete completion cache cleared."); }),
-    vscode.commands.registerCommand("deinscomplete.feedbackHelpful", () => { feedback.record("helpful"); logger.info("Completion feedback=helpful"); }),
-    vscode.commands.registerCommand("deinscomplete.feedbackNotHelpful", () => { feedback.record("not-helpful"); logger.info("Completion feedback=not-helpful"); }),
+    vscode.commands.registerCommand("deinscomplete.feedbackHelpful", () => { feedback.record("helpful"); quality.feedback("helpful", "none"); logger.info("Completion feedback=helpful"); }),
+    vscode.commands.registerCommand("deinscomplete.feedbackNotHelpful", () => { feedback.record("not-helpful"); quality.feedback("not-helpful", "general"); logger.info("Completion feedback=not-helpful"); }),
     vscode.commands.registerCommand("deinscomplete.reportBadSuggestion", async () => {
       const reason = await vscode.window.showQuickPick(["Incorrect API or symbol", "Irrelevant suggestion", "Too slow", "Too much code", "Other"], { title: "Report the last suggestion", placeHolder: "No source code will be included" });
       if (reason === undefined) return;
       feedback.record("not-helpful");
+      quality.feedback("not-helpful", feedbackReason(reason));
       const authentication = await installation.getToken() ? "Ready" : "Not registered";
       const report = `${diagnosticReport(lifecycle, requests, repositoryContext, engine, feedback, "Not checked", authentication, config.qualityInsightsEnabled())}\nFeedback reason: ${reason}`;
       await vscode.env.clipboard.writeText(report);
@@ -132,6 +133,14 @@ export function registerCommands(
       }
     }),
   ];
+}
+
+function feedbackReason(reason: string): "incorrect-api" | "irrelevant" | "too-slow" | "too-much-code" | "other" {
+  if (reason === "Incorrect API or symbol") return "incorrect-api";
+  if (reason === "Irrelevant suggestion") return "irrelevant";
+  if (reason === "Too slow") return "too-slow";
+  if (reason === "Too much code") return "too-much-code";
+  return "other";
 }
 
 function diagnosticReport(

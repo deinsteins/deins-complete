@@ -11,8 +11,9 @@ export type QualityCompletion = Omit<QualityEvent, "eventId" | "type">;
 /** Sends bounded outcome metadata only; failures never enter the completion path. */
 export class QualityReporter {
   private available = true;
+  private lastShown?: QualityCompletion;
 
-  constructor(private readonly settings: QualitySettings, private readonly client: BackendClient, private readonly logger?: QualityLog) {}
+  constructor(private readonly settings: QualitySettings, private readonly client: BackendClient, private readonly clientVersion: string, private readonly logger?: QualityLog) {}
 
   shown(request: CompletionRequest, result: CompletionResult): QualityCompletion | undefined {
     if (!this.enabled()) return undefined;
@@ -25,7 +26,9 @@ export class QualityReporter {
       mode: request.mode === "full" ? "full" : "fast",
       source: result.source === "cache" ? "cache" : "backend",
       latencyMs: Math.min(30000, Math.max(0, Math.round(result.latencyMs ?? 0))),
+      clientVersion: category(this.clientVersion),
     };
+    this.lastShown = context;
     this.send({ ...context, eventId: randomUUID(), type: "shown" });
     return context;
   }
@@ -33,6 +36,13 @@ export class QualityReporter {
   accepted(context?: QualityCompletion): void {
     if (context === undefined || !this.enabled()) return;
     this.send({ ...context, eventId: randomUUID(), type: "accepted" });
+  }
+
+  feedback(type: "helpful" | "not-helpful", feedbackReason: NonNullable<QualityEvent["feedbackReason"]>): boolean {
+    if (this.lastShown === undefined || !this.enabled()) return false;
+    this.send({ ...this.lastShown, eventId: randomUUID(), type, feedbackReason });
+    this.lastShown = undefined;
+    return true;
   }
 
   private enabled(): boolean { return this.available && this.settings.qualityInsightsEnabled() && this.client.sendQualityEvent !== undefined; }

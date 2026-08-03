@@ -152,8 +152,8 @@ paths:
         '429': { $ref: '#/components/responses/CompletionLimited' }
   /v1/quality/events:
     post:
-      summary: Record an opt-in, privacy-safe completion outcome event.
-      description: Accepts shown and accepted outcomes only. Source code, file paths, repository snippets, provider identity, account email, and credentials are not accepted.
+      summary: Record an opt-in, privacy-safe completion outcome or explicit feedback event.
+      description: Accepts shown, accepted, helpful, and not-helpful categories. Negative feedback may include one bounded reason category. Source code, free-form feedback, file paths, repository snippets, provider identity, account email, and credentials are not accepted.
       security:
         - InstallationBearerAuth: []
         - InstallationTokenAuth: []
@@ -247,7 +247,7 @@ components:
       properties:
         eventId: { type: string, format: uuid }
         completionId: { type: string, format: uuid }
-        type: { type: string, enum: [shown, accepted] }
+        type: { type: string, enum: [shown, accepted, helpful, not-helpful] }
         requestId: { type: string, maxLength: 128 }
         language: { type: string, pattern: '^[a-z0-9][a-z0-9+.#_-]{0,39}$' }
         framework: { type: string, pattern: '^[a-z0-9][a-z0-9+.#_-]{0,39}$' }
@@ -255,6 +255,8 @@ components:
         mode: { type: string, enum: [fast, full] }
         source: { type: string, enum: [backend, cache] }
         latencyMs: { type: integer, minimum: 0, maximum: 30000 }
+        clientVersion: { type: string, pattern: '^[a-z0-9][a-z0-9+.#_-]{0,39}$', description: Extension version category. Older clients may omit it and are recorded as unknown. }
+        feedbackReason: { type: string, enum: [none, general, incorrect-api, irrelevant, too-slow, too-much-code, other], description: Bounded reason category for explicit feedback; source code and free-form text are not accepted. }
     MagicCodeRequest:
       type: object
       required: [email]
@@ -387,7 +389,7 @@ components:
           items: { type: string, maxLength: 200 }
         focus:
           type: string
-          enum: [component-props, member-access, function-arguments, tailwind-class, object-fields, general]
+          enum: [component-props, member-access, function-arguments, tailwind-class, object-fields, import, function-body, condition-expression, type-definition, general]
           description: Server-side completion-position classification.
         diagnostics:
           type: array
@@ -403,6 +405,10 @@ components:
       required: [context]
       properties:
         context: { $ref: '#/components/schemas/CompletionContext' }
+        intent:
+          type: string
+          enum: [component-props, member-access, function-arguments, tailwind-class, object-fields, import, function-body, condition-expression, type-definition, general]
+          description: Optional editor-classified completion intent used for context, prompt, and output-size policy. Older clients may omit it.
         repositoryContext: { $ref: '#/components/schemas/RepositoryContext', description: Optional bounded context from relevant workspace files. }
         client: { $ref: '#/components/schemas/Client' }
     CompletionResult:

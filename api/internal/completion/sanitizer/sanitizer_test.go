@@ -35,3 +35,13 @@ func TestLimitsAndBlankLines(t *testing.T) {
 		t.Fatal(got)
 	}
 }
+func TestIntentLineLimitAndLanguageMismatch(t *testing.T) {
+	s := New(Config{MaxLines: 20, MaxChars: 8000})
+	request := completion.Request{Context: completion.Context{Language: "typescript"}, Intent: "member-access"}
+	if got := s.Sanitize(request, "map(item => item.id)\nunrelated()"); got != "map(item => item.id)" {
+		t.Fatal(got)
+	}
+	if got := s.Sanitize(request, "def calculate():\n    pass"); got != "" {
+		t.Fatalf("wrong-language output was retained: %q", got)
+	}
+}

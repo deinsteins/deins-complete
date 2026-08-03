@@ -6,11 +6,10 @@ import { Logger } from "../logging/logger";
 import { bridgeCancellation } from "../utils/cancellation";
 import { RequestManager } from "./requestManager";
 import { CompletionRequest } from "./completionTypes";
-import { completionRequestMode } from "./contextComplexity";
+import { completionFocus, completionRequestMode } from "./contextComplexity";
 import { EditorStateSnapshot, isCurrentEditorState } from "./editorState";
 import { AutoImportResolver } from "./autoImportResolver";
 import { FeedbackService } from "../feedback/feedbackService";
-import { completionFocus } from "./contextComplexity";
 import { QualityReporter } from "../feedback/qualityReporter";
 
 export class DeinsCompleteInlineCompletionProvider implements vscode.InlineCompletionItemProvider {
@@ -40,6 +39,7 @@ export class DeinsCompleteInlineCompletionProvider implements vscode.InlineCompl
     const request: CompletionRequest = this.contextBuilder.build(document, position);
     const cancellation = bridgeCancellation(token);
     void this.autoImports.prefetch(document, position);
+    request.intent = completionFocus(request);
     request.mode = completionRequestMode(request);
     if (request.mode === "full") request.repositoryContextTask = this.repositoryContextBuilder.build(document, request, cancellation.signal);
     this.logger.debug(`Inline completion requested (language=${request.language}, version=${snapshot.version}, prefixChars=${request.metadata.prefixCharacters}, suffixChars=${request.metadata.suffixCharacters})`);
@@ -59,7 +59,7 @@ export class DeinsCompleteInlineCompletionProvider implements vscode.InlineCompl
       }
 
       this.logger.debug("Inline completion produced result");
-      const focus = completionFocus(request);
+      const focus = request.intent ?? completionFocus(request);
       this.feedback.recordShown(focus);
       const quality = this.quality.shown(request, result);
       const prefetchedImport = this.autoImports.getPrefetched(document, position, result.text);

@@ -106,6 +106,7 @@ export function toApiCompletionRequest(request: CompletionRequest, version: stri
       filePath: request.safeFilePath,
       cursorOffset: request.cursorOffset,
     },
+    ...(request.intent !== undefined ? { intent: request.intent } : {}),
     client: { name: "deinscomplete-vscode", version },
   };
   if (request.repositoryContext !== undefined) {

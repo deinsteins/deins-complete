@@ -148,6 +148,29 @@ func TestPromptIncludesRepositoryContext(t *testing.T) {
 	}
 }
 
+func TestIntentGuidesPromptAndBoundsOutputTokens(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		var payload ChatCompletionRequest
+		if err := json.NewDecoder(request.Body).Decode(&payload); err != nil {
+			t.Fatal(err)
+		}
+		if payload.MaxTokens != 48 || !strings.Contains(payload.Messages[1].Content, "Completion intent: member-access") || !strings.Contains(payload.Messages[1].Content, "most likely valid member") {
+			t.Fatalf("intent policy missing: tokens=%d prompt=%q", payload.MaxTokens, payload.Messages[1].Content)
+		}
+		_, _ = writer.Write([]byte(`{"choices":[{"message":{"content":"name"},"finish_reason":"stop"}]}`))
+	}))
+	defer server.Close()
+	provider, err := New(testConfig(server.URL), testLogger())
+	if err != nil {
+		t.Fatal(err)
+	}
+	request := testRequest()
+	request.Intent = "member-access"
+	if _, err := provider.Complete(context.Background(), request); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestBestChoiceRejectsArtifactsAndWrongLanguage(t *testing.T) {
 	choices := make([]chatChoice, 3)
 	choices[0].Message.Content = "```ts\nawait getUser()\n```"

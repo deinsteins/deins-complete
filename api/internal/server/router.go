@@ -18,7 +18,7 @@ import (
 	"deinscomplete/api/internal/usage"
 )
 
-func newRouter(logger *slog.Logger, service *completion.Service, authService *auth.Service, enabled bool, streaming bool, limiter ratelimit.Limiter, tracker usage.Tracker, monthly usage.MonthlyTracker, readiness func(context.Context) error, repo *account.Repository, accounts *account.Service, accountTokens *accountauth.Service, accountRequired bool, adminToken string, qualityEnabled bool) http.Handler {
+func newRouter(logger *slog.Logger, service *completion.Service, authService *auth.Service, enabled bool, streaming bool, limiter ratelimit.Limiter, tracker usage.Tracker, monthly usage.MonthlyTracker, readiness func(context.Context) error, repo *account.Repository, accounts *account.Service, accountTokens *accountauth.Service, accountRequired bool, adminToken string, qualityEnabled bool, qualitySamplePercent int) http.Handler {
 	router := chi.NewRouter()
 	router.Use(middleware.RequestID, middleware.Recovery(logger), middleware.Logging(logger))
 	router.Get("/", handlers.Root)
@@ -43,7 +43,7 @@ func newRouter(logger *slog.Logger, service *completion.Service, authService *au
 		router.With(user, middleware.InstallationToken(authService, repo)).Post("/v1/installations/link", h.Link)
 	}
 	if repo != nil && adminToken != "" {
-		h := handlers.NewAdminHandler(repo, monthly)
+		h := handlers.NewAdminHandler(repo, monthly, qualitySamplePercent)
 		admin := middleware.AdminAuth(adminToken)
 		router.Get("/admin", handlers.AdminPage)
 		router.With(admin).Get("/v1/admin/overview", h.Overview)
@@ -56,7 +56,7 @@ func newRouter(logger *slog.Logger, service *completion.Service, authService *au
 		router.With(admin).Post("/v1/admin/installations/{id}/revoke", h.RevokeInstallation)
 	}
 	if qualityEnabled && repo != nil && enabled {
-		qualityHandler := handlers.NewQualityHandler(repo)
+		qualityHandler := handlers.NewQualityHandler(repo, qualitySamplePercent)
 		quality := http.Handler(http.HandlerFunc(qualityHandler.Record))
 		quality = middleware.InstallationStatus(repo)(quality)
 		quality = middleware.Auth(authService)(quality)

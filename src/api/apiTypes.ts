@@ -7,6 +7,7 @@ export interface ApiCompletionRequest {
     filePath: string;
     cursorOffset: number;
   };
+  intent?: string;
   repositoryContext?: {
     files: Array<{ path: string; language: string; content: string; reason: string }>;
     symbols?: Array<{ name: string; kind: string; filePath: string; signature?: string }>;
@@ -69,7 +70,7 @@ export interface AccountInstallation {
 export interface QualityEvent {
   eventId: string;
   completionId: string;
-  type: "shown" | "accepted";
+  type: "shown" | "accepted" | "helpful" | "not-helpful";
   requestId?: string;
   language: string;
   framework: string;
@@ -77,4 +78,6 @@ export interface QualityEvent {
   mode: "fast" | "full";
   source: "backend" | "cache";
   latencyMs: number;
+  clientVersion: string;
+  feedbackReason?: "none" | "general" | "incorrect-api" | "irrelevant" | "too-slow" | "too-much-code" | "other";
 }

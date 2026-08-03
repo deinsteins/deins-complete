@@ -174,14 +174,20 @@ func TestParseQualityEventsConfiguration(t *testing.T) {
 		"ACCOUNT_ACCESS_TOKEN_SECRET":   "01234567890123456789012345678901",
 		"QUALITY_EVENTS_ENABLED":        "true",
 		"QUALITY_EVENTS_RETENTION_DAYS": "45",
+		"QUALITY_EVENTS_SAMPLE_PERCENT": "25",
 	}
 	configuration, err := parse(func(key string) string { return values[key] })
-	if err != nil || !configuration.Quality.Enabled || configuration.Quality.RetentionDays != 45 {
+	if err != nil || !configuration.Quality.Enabled || configuration.Quality.RetentionDays != 45 || configuration.Quality.SamplePercent != 25 {
 		t.Fatalf("unexpected quality configuration: %#v %v", configuration.Quality, err)
 	}
 	values["QUALITY_EVENTS_RETENTION_DAYS"] = "0"
 	if _, err := parse(func(key string) string { return values[key] }); err == nil {
 		t.Fatal("expected invalid quality retention error")
+	}
+	values["QUALITY_EVENTS_RETENTION_DAYS"] = "45"
+	values["QUALITY_EVENTS_SAMPLE_PERCENT"] = "101"
+	if _, err := parse(func(key string) string { return values[key] }); err == nil {
+		t.Fatal("expected invalid quality sampling error")
 	}
 }
 

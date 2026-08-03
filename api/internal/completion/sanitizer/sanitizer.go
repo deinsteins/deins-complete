@@ -24,9 +24,25 @@ func (s CompletionSanitizer) Sanitize(req completion.Request, raw string) string
 	text = removePrefixOverlap(req.Context.Prefix, text)
 	text = removeSuffixOverlap(text, req.Context.Suffix)
 	text = collapseBlankLines(trimBlankLines(text))
-	text = limitLines(text, s.config.MaxLines)
+	if wrongLanguage(req.Context.Language, text) {
+		return ""
+	}
+	text = limitLines(text, completion.MaxLinesForIntent(req.Intent, s.config.MaxLines))
 	text = limitChars(text, s.config.MaxChars)
 	return trimBlankLines(text)
+}
+func wrongLanguage(language, text string) bool {
+	lower := strings.ToLower(strings.TrimSpace(text))
+	switch strings.ToLower(language) {
+	case "typescript", "typescriptreact", "javascript", "javascriptreact":
+		return strings.HasPrefix(lower, "def ") || strings.HasPrefix(lower, "package main") || strings.HasPrefix(lower, "func ")
+	case "python":
+		return strings.HasPrefix(lower, "package main") || strings.HasPrefix(lower, "func ") || strings.HasPrefix(lower, "const ")
+	case "go":
+		return strings.HasPrefix(lower, "def ") || strings.HasPrefix(lower, "import {")
+	default:
+		return false
+	}
 }
 func stripFence(s string) string {
 	t := strings.TrimSpace(s)

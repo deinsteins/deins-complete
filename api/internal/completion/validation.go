@@ -19,7 +19,7 @@ var ErrInvalidRequest = errors.New("invalid completion request")
 func Validate(request Request) error {
 	context := request.Context
 	if context.Language == "" || len(context.Language) > MaxLanguageLength || len(context.FilePath) > MaxFilePathLength ||
-		len(context.Prefix) > MaxPrefixCharacters || len(context.Suffix) > MaxSuffixCharacters || context.CursorOffset < 0 {
+		len(context.Prefix) > MaxPrefixCharacters || len(context.Suffix) > MaxSuffixCharacters || context.CursorOffset < 0 || !ValidIntent(request.Intent) {
 		return ErrInvalidRequest
 	}
 	if request.Client != nil && (len(request.Client.Name) > MaxClientFieldLength || len(request.Client.Version) > MaxClientFieldLength) {
@@ -44,7 +44,7 @@ func Validate(request Request) error {
 				return ErrInvalidRequest
 			}
 		}
-		if repository.Focus != "" && repository.Focus != "component-props" && repository.Focus != "member-access" && repository.Focus != "function-arguments" && repository.Focus != "tailwind-class" && repository.Focus != "object-fields" && repository.Focus != "general" {
+		if !ValidIntent(repository.Focus) {
 			return ErrInvalidRequest
 		}
 		for _, dependency := range repository.Dependencies {

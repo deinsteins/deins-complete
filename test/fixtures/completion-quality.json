@@ -52,5 +52,50 @@
     "imports": "import { createOrder } from \"./service\";",
     "expectedMode": "full",
     "expectedFocus": "function-arguments"
+  },
+  {
+    "name": "library import",
+    "language": "typescript",
+    "filePath": "src/hooks/useProduct.ts",
+    "prefix": "import { use",
+    "imports": "",
+    "expectedMode": "full",
+    "expectedFocus": "import"
+  },
+  {
+    "name": "function body",
+    "language": "typescript",
+    "filePath": "src/pricing/calculate.ts",
+    "prefix": "function calculateTotal(items: Item[]) {",
+    "imports": "",
+    "expectedMode": "fast",
+    "expectedFocus": "function-body"
+  },
+  {
+    "name": "condition expression",
+    "language": "typescript",
+    "filePath": "src/auth/guard.ts",
+    "prefix": "if (user && ",
+    "imports": "",
+    "expectedMode": "fast",
+    "expectedFocus": "condition-expression"
+  },
+  {
+    "name": "type definition",
+    "language": "typescript",
+    "filePath": "src/types/product.ts",
+    "prefix": "interface Product {",
+    "imports": "",
+    "expectedMode": "fast",
+    "expectedFocus": "type-definition"
+  },
+  {
+    "name": "imported typed object fields",
+    "language": "typescript",
+    "filePath": "src/products/create.ts",
+    "prefix": "const product: Product = {",
+    "imports": "import type { Product } from \"../types/product\";",
+    "expectedMode": "full",
+    "expectedFocus": "object-fields"
   }
 ]

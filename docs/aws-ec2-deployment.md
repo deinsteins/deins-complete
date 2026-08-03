@@ -45,9 +45,10 @@ The completion-quality dashboard is opt-in. To run a controlled beta, add:
 ```env
 QUALITY_EVENTS_ENABLED=true
 QUALITY_EVENTS_RETENTION_DAYS=30
+QUALITY_EVENTS_SAMPLE_PERCENT=100
 ```
 
-Run the database migration before restarting the API, then ask selected testers to enable `deinscomplete.qualityInsights.enabled`. Leave the server flag false outside the experiment. The endpoint accepts bounded outcome metadata only and is installation-authenticated plus rate-limited.
+The sample percentage is a deterministic server-side rollout control from `0` to `100`; shown and accepted events for the same completion are sampled together. Run the database migration before restarting the API, then ask selected testers to enable `deinscomplete.qualityInsights.enabled`. Leave the server flag false outside the experiment. The endpoint accepts bounded outcome metadata only and is installation-authenticated plus rate-limited.
 
 Deploy an immutable image:
 

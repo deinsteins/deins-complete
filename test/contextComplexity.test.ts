@@ -12,10 +12,18 @@ test("JSX and Tailwind class editing use the full completion path", () => {
   assert.equal(completionRequestMode(context("<Button", 'import { Button } from "antd";')), "full");
   assert.equal(completionRequestMode(context('className="')), "full");
 });
-test("completion focus distinguishes props, members, calls, classes, and object fields", () => {
+test("imports and imported object types use repository context", () => {
+  assert.equal(completionRequestMode(context("import { use")), "full");
+  assert.equal(completionRequestMode(context("const user: User = {", 'import type { User } from "./types";')), "full");
+});
+test("completion focus distinguishes common completion intents", () => {
   assert.equal(completionFocus(context("<Button ")), "component-props");
   assert.equal(completionFocus(context("service.")), "member-access");
   assert.equal(completionFocus(context("createOrder(")), "function-arguments");
   assert.equal(completionFocus(context('className="')), "tailwind-class");
   assert.equal(completionFocus(context("{ name")), "object-fields");
+  assert.equal(completionFocus(context("import { use")), "import");
+  assert.equal(completionFocus(context("function total() {")), "function-body");
+  assert.equal(completionFocus(context("if (user && ")), "condition-expression");
+  assert.equal(completionFocus(context("interface Product {")), "type-definition");
 });

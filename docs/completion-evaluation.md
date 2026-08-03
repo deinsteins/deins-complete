@@ -5,6 +5,13 @@ Use only synthetic or explicitly shareable fixtures. The deterministic fixture s
 classification for local TypeScript, cross-file services, React props, Material UI,
 Tailwind, and imported function calls.
 
+The extension classifies each cursor position into a bounded completion intent:
+component props, member access, function arguments, Tailwind classes, object fields,
+imports, function bodies, condition expressions, type definitions, or general. The
+backend uses that intent to select concise prompt guidance and output limits. It is a
+hint only: unknown values are rejected, while older clients without an intent remain
+compatible.
+
 For model-quality A/B evaluation, keep the cursor input and target configuration fixed,
 then record:
 
@@ -20,6 +27,9 @@ against a paid production provider.
 
 Do not include customer code, absolute paths, credentials, prompts, or raw proprietary
 completion text in recorded results.
+
+When comparing quality, report results per intent. A global acceptance rate can hide a
+regression in JSX props or imported API completion.
 
 ## Controlled provider run
 

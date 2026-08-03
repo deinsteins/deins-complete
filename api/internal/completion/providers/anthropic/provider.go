@@ -61,7 +61,7 @@ func New(cfg config.AIConfig, logger *slog.Logger) (*Provider, error) {
 func (p *Provider) Complete(ctx context.Context, req completion.Request) (completion.Result, error) {
 	ctx, cancel := context.WithTimeout(ctx, p.timeout)
 	defer cancel()
-	body, _ := json.Marshal(requestBody{Model: p.model, MaxTokens: p.maxTokens, Temperature: p.temperature, System: systemPrompt, Messages: []message{{Role: "user", Content: userPrompt(req)}}})
+	body, _ := json.Marshal(requestBody{Model: p.model, MaxTokens: completion.MaxTokensForIntent(req.Intent, p.maxTokens), Temperature: p.temperature, System: systemPrompt, Messages: []message{{Role: "user", Content: userPrompt(req)}}})
 	r, err := http.NewRequestWithContext(ctx, http.MethodPost, p.baseURL+"/v1/messages", bytes.NewReader(body))
 	if err != nil {
 		return completion.Result{}, completion.NewProviderError(completion.ProviderInvalidResponse, err)
@@ -101,7 +101,7 @@ func (p *Provider) Complete(ctx context.Context, req completion.Request) (comple
 const systemPrompt = "You are a code completion engine. Return only code inserted at the cursor. Do not explain, use Markdown, or repeat surrounding code. Prefer the smallest useful completion."
 
 func userPrompt(r completion.Request) string {
-	prompt := "File: " + completion.SafeFileName(r.Context.FilePath) + "\nLanguage: " + r.Context.Language + "\n\n<PREFIX>\n" + r.Context.Prefix + "\n</PREFIX>\n\n<SUFFIX>\n" + r.Context.Suffix + "\n</SUFFIX>"
+	prompt := "File: " + completion.SafeFileName(r.Context.FilePath) + "\nLanguage: " + r.Context.Language + "\nCompletion intent: " + r.Intent + "\nIntent guidance: " + completion.IntentInstruction(r.Intent) + "\n\n<PREFIX>\n" + r.Context.Prefix + "\n</PREFIX>\n\n<SUFFIX>\n" + r.Context.Suffix + "\n</SUFFIX>"
 	if r.RepositoryContext != nil && (len(r.RepositoryContext.Files) > 0 || len(r.RepositoryContext.Dependencies) > 0 || len(r.RepositoryContext.Symbols) > 0 || r.RepositoryContext.Focus != "") {
 		prompt += "\n\n<REPOSITORY_CONTEXT>"
 		if r.RepositoryContext.Focus != "" {

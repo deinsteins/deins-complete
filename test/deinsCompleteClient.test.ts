@@ -119,7 +119,7 @@ test("quality events use installation auth without changing completion availabil
     }
     return response(200, { completion: { text: "ok" } });
   }, undefined, "0.0.1", async () => "installation-token");
-  await assert.rejects(() => client.sendQualityEvent({ eventId: "event", completionId: "completion", type: "shown", language: "ts", framework: "none", focus: "general", mode: "fast", source: "backend", latencyMs: 1 }));
+  await assert.rejects(() => client.sendQualityEvent({ eventId: "event", completionId: "completion", type: "shown", language: "ts", framework: "none", focus: "general", mode: "fast", source: "backend", latencyMs: 1, clientVersion: "0.1.16" }));
   assert.equal((await client.complete(request, new AbortController().signal)).completion.text, "ok");
   assert.equal(calls.length, 2);
 });

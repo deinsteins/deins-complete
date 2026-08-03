@@ -47,26 +47,48 @@ func (service *Service) Stream(ctx context.Context, request Request, onChunk fun
 		return service.Complete(ctx, request)
 	}
 	var raw string
+	singleLine := singleLineFocus(request)
 	err := stream.StreamComplete(ctx, request, func(chunk string) error {
+		previousLength := len(raw)
 		raw += chunk
-		if err := onChunk(chunk); err != nil {
-			return err
+		stop := false
+		if singleLine {
+			if newline := strings.Index(raw, "\n"); newline >= 0 {
+				chunk = chunk[:maxInt(0, newline-previousLength)]
+				raw = raw[:newline]
+				stop = true
+			}
 		}
-		if singleLineFocus(request) && strings.Contains(raw, "\n") {
+		if chunk != "" {
+			if err := onChunk(chunk); err != nil {
+				return err
+			}
+		}
+		if stop {
 			return errUsefulLineComplete
+		}
+		if err := ctx.Err(); err != nil {
+			return err
 		}
 		return nil
 	})
-	if errors.Is(err, errUsefulLineComplete) {
-		raw = raw[:strings.Index(raw, "\n")]
-	}
 	if err != nil && !errors.Is(err, errUsefulLineComplete) {
 		return Result{}, err
 	}
 	return Result{Text: service.sanitizer.Sanitize(request, raw)}, nil
 }
 
+func maxInt(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
+}
+
 func singleLineFocus(request Request) bool {
+	if request.Intent != "" {
+		return SingleLineIntent(request.Intent)
+	}
 	if request.RepositoryContext == nil {
 		return false
 	}
