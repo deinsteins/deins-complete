@@ -2,7 +2,7 @@
   "name": "deinscomplete",
   "displayName": "DeinsComplete",
   "description": "Fast AI-powered inline code completion for VS Code.",
-  "version": "0.1.12",
+  "version": "0.1.13",
   "publisher": "deinscomplete",
   "icon": "media/deinscomplete-icon.png",
   "repository": {
@@ -58,6 +58,18 @@
         "title": "DeinsComplete: Account Status"
       },
       {
+        "command": "deinscomplete.accountCenter",
+        "title": "DeinsComplete: Open Account Center"
+      },
+      {
+        "command": "deinscomplete.welcome",
+        "title": "DeinsComplete: Welcome & Getting Started"
+      },
+      {
+        "command": "deinscomplete.triggerCompletion",
+        "title": "DeinsComplete: Trigger Inline Completion"
+      },
+      {
         "command": "deinscomplete.clearCompletionCache",
         "title": "DeinsComplete: Clear Completion Cache"
       },
@@ -72,6 +84,14 @@
       {
         "command": "deinscomplete.feedbackNotHelpful",
         "title": "DeinsComplete: Mark Last Suggestion Not Helpful"
+      },
+      {
+        "command": "deinscomplete.reportBadSuggestion",
+        "title": "DeinsComplete: Report Bad Suggestion"
+      },
+      {
+        "command": "deinscomplete.copyDiagnostics",
+        "title": "DeinsComplete: Copy Privacy-Safe Diagnostics"
       }
     ],
     "configuration": {

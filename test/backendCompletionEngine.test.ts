@@ -24,8 +24,9 @@ class TestClient implements BackendClient {
 const logger = { debug: () => undefined };
 
 test("backend completion engine maps backend text", async () => {
-  const engine = new BackendCompletionEngine(new TestClient({ completion: { text: "await getUser();" } }), "0.0.1", logger);
+  const engine = new BackendCompletionEngine(new TestClient({ completion: { text: "await getUser();" }, requestId: "req-safe" }), "0.0.1", logger);
   assert.deepEqual(await engine.complete(request, new AbortController().signal), { text: "await getUser();" });
+  assert.equal(engine.getStats().lastRequestId, "req-safe");
 });
 
 test("backend completion engine maps empty completion to null", async () => {
@@ -63,10 +64,12 @@ test("backend completion engine prefers streaming and falls back when unavailabl
 });
 
 test("backend completion engine handles backend and cancellation errors silently", async () => {
-  const offline = new BackendCompletionEngine(new TestClient(new NetworkError("offline")), "0.0.1", logger);
+  const states: string[] = [];
+  const offline = new BackendCompletionEngine(new TestClient(new NetworkError("offline")), "0.0.1", logger, undefined, undefined, undefined, () => false, undefined, (state) => states.push(state));
   const cancelled = new BackendCompletionEngine(new TestClient(new CancelledError("cancelled")), "0.0.1", logger);
   assert.equal(await offline.complete(request, new AbortController().signal), null);
   assert.equal(await cancelled.complete(request, new AbortController().signal), null);
+  assert.deepEqual(states, ["offline"]);
 });
 
 test("account-required response does not reset installation authentication", async () => {

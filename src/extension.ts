@@ -17,6 +17,9 @@ import { InstallationService } from "./identity/installationService";
 import { FeedbackService } from "./feedback/feedbackService";
 import { AutoImportResolver } from "./completion/autoImportResolver";
 import { AccountService } from "./account/accountService";
+import { completionFocus } from "./completion/contextComplexity";
+import { conflictingInlineCompletionExtensions } from "./completion/conflictDetection";
+import { showAccountCenter, showWelcome } from "./ui/extensionPanels";
 
 export function activate(context: vscode.ExtensionContext): void {
   const logger = new Logger();
@@ -90,9 +93,13 @@ export function activate(context: vscode.ExtensionContext): void {
     void authenticate(new AbortController().signal).catch(() => logger.debug("Installation registration deferred"));
     void account.isSignedIn().then((signedIn) => { if (signedIn) void ensureAccountLinked(); });
     let quotaNotified = false;
+    let completionAvailability: "offline" | "quota" | undefined;
     const engine = new BackendCompletionEngine(backendClient, extensionVersion, logger, authenticate, refreshAuthentication, () => {
-      if (!quotaNotified) { quotaNotified = true; void vscode.window.showWarningMessage("DeinsComplete daily completion limit reached."); }
-    }, () => config.streamingEnabled(), scheduleQuotaRefresh);
+      if (!quotaNotified) { quotaNotified = true; void vscode.window.showWarningMessage("DeinsComplete completion quota reached. Open Account Center for details.", "Account Center").then((choice) => { if (choice === "Account Center") void vscode.commands.executeCommand("deinscomplete.accountCenter"); }); }
+    }, () => config.streamingEnabled(), scheduleQuotaRefresh, (state) => {
+      completionAvailability = state === "ready" ? undefined : state;
+    });
+    const feedback = new FeedbackService(context.workspaceState);
     let statusReset: ReturnType<typeof setTimeout> | undefined;
     const requests = new RequestManager(engine, config, (activity) => {
       if (statusReset !== undefined) clearTimeout(statusReset);
@@ -102,21 +109,30 @@ export function activate(context: vscode.ExtensionContext): void {
         statusBar.setActivity("Cached");
         statusReset = setTimeout(() => statusBar.update(lifecycle.getState()), 800);
       } else {
-        statusBar.update(lifecycle.getState());
+        if (completionAvailability === "offline") statusBar.setActivity("Offline");
+        else if (completionAvailability === "quota") statusBar.setQuotaExceeded();
+        else statusBar.update(lifecycle.getState());
       }
-    });
+    }, (request) => feedback.debounceAdjustment(completionFocus(request)));
     const repositoryContext = new RepositoryContextBuilder(config);
-    const feedback = new FeedbackService();
     const autoImports = new AutoImportResolver();
     const completionProvider = new DeinsCompleteInlineCompletionProvider(lifecycle, new ContextBuilder(config, undefined, getSafeFilePath), repositoryContext, requests, logger, autoImports, feedback, canComplete);
     statusBar.update(lifecycle.getState());
     void refreshAccountStatus();
     const accountRefresh = setInterval(() => void refreshAccountStatus(), 10 * 60 * 1000);
-    if (!context.globalState.get<boolean>("deinscomplete.onboarding.seen")) {
-      void context.globalState.update("deinscomplete.onboarding.seen", true);
-      void vscode.window.showInformationMessage("DeinsComplete is ready. Pause after typing to see ghost text; press Tab to accept or Esc to dismiss.", "Open Diagnostics").then((choice) => { if (choice === "Open Diagnostics") void vscode.commands.executeCommand("deinscomplete.diagnostics"); });
+    if (!context.globalState.get<boolean>("deinscomplete.onboarding.seen.v2")) {
+      void context.globalState.update("deinscomplete.onboarding.seen.v2", true);
+      showWelcome();
     }
-
+    if (!context.globalState.get<boolean>("deinscomplete.conflictNotice.seen")) {
+      const conflicts = conflictingInlineCompletionExtensions(vscode.extensions.all.map((extension) => extension.id));
+      if (conflicts.length > 0) {
+        void context.globalState.update("deinscomplete.conflictNotice.seen", true);
+        void vscode.window.showInformationMessage(`Another inline completion extension is installed (${conflicts.join(", ")}). Disable one if ghost text conflicts.`, "Open Extensions").then((choice) => {
+          if (choice === "Open Extensions") void vscode.commands.executeCommand("workbench.extensions.search", "@enabled");
+        });
+      }
+    }
     context.subscriptions.push(
       statusBar,
       { dispose: () => { if (statusReset !== undefined) clearTimeout(statusReset); if (quotaRefresh !== undefined) clearTimeout(quotaRefresh); clearInterval(accountRefresh); } },
@@ -127,6 +143,8 @@ export function activate(context: vscode.ExtensionContext): void {
       vscode.window.onDidChangeActiveTextEditor((editor) => { if (editor !== undefined) repositoryContext.record(editor.document); }),
       // Remote WSL/SSH workspaces use vscode-remote rather than file URIs.
       vscode.languages.registerInlineCompletionItemProvider([{ scheme: "file" }, { scheme: "vscode-remote" }], completionProvider),
+      vscode.commands.registerCommand("deinscomplete.accountCenter", () => showAccountCenter(account, refreshAccountStatus, logger)),
+      vscode.commands.registerCommand("deinscomplete.welcome", () => showWelcome()),
       ...registerCommands(config, lifecycle, logger, backendClient, requests, installation, repositoryContext, engine, feedback, autoImports, account, refreshAccountStatus, () => authenticate(new AbortController().signal)),
     );
     logger.info(`DeinsComplete activated version=${extensionVersion} backend=${safeBackendOrigin(config.getBackendUrl())}`);

@@ -15,3 +15,9 @@ test("dependency context does not include unrelated packages or parse invalid ma
   assert.deepEqual(relevantDependencies(manifest, "const value = 1;"), []);
   assert.deepEqual(relevantDependencies("not-json", 'import "antd"'), []);
 });
+
+test("dependency context recognizes declared framework from source signals", () => {
+  const frameworks = JSON.stringify({ dependencies: { react: "x", next: "x", vue: "x", "@angular/core": "x" } });
+  assert.deepEqual(relevantDependencies(frameworks, "const [value, setValue] = useState(0); return <ProductCard />"), ["next", "react"]);
+  assert.deepEqual(relevantDependencies(frameworks, "@Component({ selector: 'app-root' })"), ["@angular/core"]);
+});

@@ -5,7 +5,7 @@ import { CompletionEngine } from "./completionEngine";
 import { CompletionRequest, CompletionResult } from "./completionTypes";
 
 export class BackendCompletionEngine implements CompletionEngine {
-  private readonly stats = { streamsStarted: 0, streamsSucceeded: 0, streamsFallback: 0, totalFirstChunkMs: 0, firstChunkSamples: 0 };
+  private readonly stats: { streamsStarted: number; streamsSucceeded: number; streamsFallback: number; totalFirstChunkMs: number; firstChunkSamples: number; lastRequestId?: string; lastDurationMs: number; lastError?: string } = { streamsStarted: 0, streamsSucceeded: 0, streamsFallback: 0, totalFirstChunkMs: 0, firstChunkSamples: 0, lastDurationMs: 0 };
   constructor(
     private readonly client: BackendClient,
     private readonly extensionVersion: string,
@@ -15,12 +15,17 @@ export class BackendCompletionEngine implements CompletionEngine {
     private readonly onQuotaExceeded?: () => void,
     private readonly streamingEnabled: () => boolean = () => true,
     private readonly onCompletionSucceeded?: () => void,
+    private readonly onAvailability?: (state: "ready" | "offline" | "quota") => void,
   ) {}
 
   async complete(request: CompletionRequest, signal: AbortSignal): Promise<CompletionResult | null> {
+    const started = performance.now();
     try {
       await this.ensureAuthentication?.(signal);
       const response = await this.completeRequest(request, signal);
+      this.stats.lastRequestId = response.requestId ?? response.metadata?.requestId;
+      this.stats.lastError = undefined;
+      this.onAvailability?.("ready");
       return this.result(response.completion.text);
     } catch (error) {
       if (error instanceof AccountRequiredError) {
@@ -33,6 +38,9 @@ export class BackendCompletionEngine implements CompletionEngine {
           await this.refreshAuthentication(signal);
           if (signal.aborted) return null;
           const response = await this.completeRequest(request, signal);
+          this.stats.lastRequestId = response.requestId ?? response.metadata?.requestId;
+          this.stats.lastError = undefined;
+          this.onAvailability?.("ready");
           return this.result(response.completion.text);
         } catch (refreshError) {
           if (refreshError instanceof CancelledError || signal.aborted) return null;
@@ -46,16 +54,24 @@ export class BackendCompletionEngine implements CompletionEngine {
       }
       if (error instanceof TimeoutError) {
         this.logger.debug("Backend completion timed out");
+        this.stats.lastRequestId = error.requestId;
+        this.stats.lastError = error.name;
+        this.onAvailability?.("offline");
         return null;
       }
       if (error instanceof RateLimitError || error instanceof QuotaExceededError) {
         this.logger.debug(error instanceof QuotaExceededError ? "Backend daily quota exceeded" : "Backend completion rate limited");
-        if (error instanceof QuotaExceededError) this.onQuotaExceeded?.();
+        if (error instanceof QuotaExceededError) { this.onQuotaExceeded?.(); this.onAvailability?.("quota"); }
         return null;
       }
       const requestId = error instanceof ApiError && error.requestId ? ` requestId=${error.requestId}` : "";
+      this.stats.lastRequestId = error instanceof ApiError ? error.requestId : undefined;
+      this.stats.lastError = error instanceof ApiError ? error.name : "Unavailable";
+      this.onAvailability?.("offline");
       this.logger.debug(`Backend completion unavailable${requestId}`);
       return null;
+    } finally {
+      this.stats.lastDurationMs = Math.round(performance.now() - started);
     }
   }
   getStats() { return { ...this.stats }; }

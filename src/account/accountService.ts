@@ -38,6 +38,7 @@ export class AccountService {
     return { account, entitlements, installations };
   }
   getEntitlements(signal?: AbortSignal): Promise<AccountEntitlements> { return this.withAccess((token) => this.client.getEntitlements(token, signal)); }
+  revokeInstallation(installationID: string, signal?: AbortSignal): Promise<void> { return this.withAccess((token) => this.client.revokeAccountInstallation(token, installationID, signal)); }
   async linkInstallation(installationToken: string, signal?: AbortSignal): Promise<void> { await this.withAccess((token) => this.client.linkInstallation(token, installationToken, signal)); this.linkedInstallationToken = installationToken; }
   async ensureLinked(installationToken: string, signal?: AbortSignal): Promise<void> { if (this.linkedInstallationToken !== installationToken) await this.linkInstallation(installationToken, signal); }
 

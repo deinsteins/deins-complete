@@ -40,17 +40,18 @@ export function registerCommands(
     }),
     vscode.commands.registerCommand("deinscomplete.showLogs", () => logger.show()),
     vscode.commands.registerCommand("deinscomplete.diagnostics", async () => {
-      const stats = requests.getStats();
       let backend = "Unavailable";
       try { const health = await backendClient.health(); backend = `Reachable (${health.latencyMs} ms)`; } catch { /* diagnostic remains safe */ }
       const authentication = await installation.getToken() ? "Ready" : "Not registered";
-      const average = stats.requested ? Math.round(stats.totalLatencyMs / stats.requested) : 0;
-      const averageDebounce = stats.backendRequests ? Math.round(stats.totalDebounceMs / stats.backendRequests) : 0;
-      const averageBackend = stats.backendRequests ? Math.round(stats.totalBackendMs / stats.backendRequests) : 0;
-      const repository = repositoryContext.getStats();
-      const streaming = engine.getStats(); const ttfb = streaming.firstChunkSamples ? Math.round(streaming.totalFirstChunkMs / streaming.firstChunkSamples) : 0;
-      const votes = feedback.getStats(); const acceptance = votes.shown ? Math.round(votes.accepted / votes.shown * 100) : 0; const report = `DeinsComplete Diagnostics\nStatus: ${lifecycle.getState()}\nBackend: ${backend}\nAuthentication: ${authentication}\nRequests: ${stats.requested}\nCache hits: ${stats.cacheHits}\nNegative cache hits: ${stats.negativeCacheHits}\nCancelled: ${stats.cancelled}\nLatency\nAverage debounce: ${averageDebounce} ms\nAverage backend: ${averageBackend} ms\nAverage total: ${average} ms\nCompletion outcomes (local only)\nShown: ${votes.shown}\nAccepted: ${votes.accepted}\nAcceptance: ${acceptance}%\nManual feedback: helpful ${votes.helpful}, not helpful ${votes.notHelpful}\nRepository Context\nFocus: ${repository.lastFocus}\nDependencies: ${repository.lastDependencies}\nLast files included: ${repository.lastFiles}\nLast chars: ${repository.lastCharacters}\nLast build time: ${repository.lastDurationMs} ms\nTimeouts: ${repository.timedOut}\nStreaming\nStarted: ${streaming.streamsStarted}\nSucceeded: ${streaming.streamsSucceeded}\nFallback: ${streaming.streamsFallback}\nAverage first chunk: ${ttfb} ms`;
+      const report = diagnosticReport(lifecycle, requests, repositoryContext, engine, feedback, backend, authentication);
       logger.info(report); void vscode.window.showInformationMessage(`DeinsComplete diagnostics: ${backend}`);
+    }),
+    vscode.commands.registerCommand("deinscomplete.copyDiagnostics", async () => {
+      let backend = "Unavailable";
+      try { const health = await backendClient.health(); backend = `Reachable (${health.latencyMs} ms)`; } catch { /* safe report retains unavailable */ }
+      const authentication = await installation.getToken() ? "Ready" : "Not registered";
+      await vscode.env.clipboard.writeText(diagnosticReport(lifecycle, requests, repositoryContext, engine, feedback, backend, authentication));
+      void vscode.window.showInformationMessage("Privacy-safe DeinsComplete diagnostics copied.");
     }),
     vscode.commands.registerCommand("deinscomplete.resetAuthentication", async () => {
       await installation.reset();
@@ -95,6 +96,19 @@ export function registerCommands(
     vscode.commands.registerCommand("deinscomplete.clearCompletionCache", () => { requests.clearCache(); logger.info("Completion cache cleared."); void vscode.window.showInformationMessage("DeinsComplete completion cache cleared."); }),
     vscode.commands.registerCommand("deinscomplete.feedbackHelpful", () => { feedback.record("helpful"); logger.info("Completion feedback=helpful"); }),
     vscode.commands.registerCommand("deinscomplete.feedbackNotHelpful", () => { feedback.record("not-helpful"); logger.info("Completion feedback=not-helpful"); }),
+    vscode.commands.registerCommand("deinscomplete.reportBadSuggestion", async () => {
+      const reason = await vscode.window.showQuickPick(["Incorrect API or symbol", "Irrelevant suggestion", "Too slow", "Too much code", "Other"], { title: "Report the last suggestion", placeHolder: "No source code will be included" });
+      if (reason === undefined) return;
+      feedback.record("not-helpful");
+      const authentication = await installation.getToken() ? "Ready" : "Not registered";
+      const report = `${diagnosticReport(lifecycle, requests, repositoryContext, engine, feedback, "Not checked", authentication)}\nFeedback reason: ${reason}`;
+      await vscode.env.clipboard.writeText(report);
+      logger.info(`Completion feedback=not-helpful reason=${reason.replace(/\s+/g, "-").toLowerCase()}`);
+      void vscode.window.showInformationMessage("Privacy-safe feedback report copied. Paste it into your beta issue report.");
+    }),
+    vscode.commands.registerCommand("deinscomplete.triggerCompletion", async () => {
+      await vscode.commands.executeCommand("editor.action.inlineSuggest.trigger");
+    }),
     vscode.commands.registerCommand("deinscomplete.applyAutoImport", (uri: vscode.Uri, position: vscode.Position, completion: string) => autoImports.resolveAndApply(uri, position, completion).catch(() => logger.debug("Verified auto-import was not applied"))),
     vscode.commands.registerCommand("deinscomplete.applyPrefetchedAutoImport", (plan: AutoImportPlan) => autoImports.apply(plan).catch(() => logger.debug("Prefetched auto-import was not applied"))),
     vscode.commands.registerCommand("deinscomplete.completionAccepted", (focus: string, plan?: AutoImportPlan, uri?: vscode.Uri, position?: vscode.Position, completion?: string) => {
@@ -115,4 +129,27 @@ export function registerCommands(
       }
     }),
   ];
+}
+
+function diagnosticReport(
+  lifecycle: DeinsCompleteLifecycle,
+  requests: RequestManager,
+  repositoryContext: RepositoryContextBuilder,
+  engine: BackendCompletionEngine,
+  feedback: FeedbackService,
+  backend: string,
+  authentication: string,
+): string {
+  const stats = requests.getStats();
+  const average = stats.requested ? Math.round(stats.totalLatencyMs / stats.requested) : 0;
+  const averageDebounce = stats.backendRequests ? Math.round(stats.totalDebounceMs / stats.backendRequests) : 0;
+  const averageBackend = stats.backendRequests ? Math.round(stats.totalBackendMs / stats.backendRequests) : 0;
+  const repository = repositoryContext.getStats();
+  const streaming = engine.getStats();
+  const ttfb = streaming.firstChunkSamples ? Math.round(streaming.totalFirstChunkMs / streaming.firstChunkSamples) : 0;
+  const votes = feedback.getStats();
+  const acceptance = votes.shown ? Math.round(votes.accepted / votes.shown * 100) : 0;
+  const language = vscode.window.activeTextEditor?.document.languageId ?? "none";
+  const version = String(vscode.extensions.getExtension("deinscomplete.deinscomplete")?.packageJSON.version ?? "unknown");
+  return `DeinsComplete Diagnostics\nExtension: ${version}\nVS Code: ${vscode.version}\nEnvironment: ${vscode.env.remoteName ?? "local"} / ${process.platform}\nLanguage: ${language}\nStatus: ${lifecycle.getState()}\nBackend: ${backend}\nAuthentication: ${authentication}\nLast request ID: ${streaming.lastRequestId ?? "none"}\nLast backend result: ${streaming.lastError ?? "ok"}\nRequests: ${stats.requested}\nCache hits: ${stats.cacheHits}\nNegative cache hits: ${stats.negativeCacheHits}\nCancelled: ${stats.cancelled}\nLatency\nAverage debounce: ${averageDebounce} ms\nAverage backend: ${averageBackend} ms\nAverage total: ${average} ms\nLast backend: ${streaming.lastDurationMs} ms\nCompletion outcomes (local only)\nShown: ${votes.shown}\nAccepted: ${votes.accepted}\nAcceptance: ${acceptance}%\nManual feedback: helpful ${votes.helpful}, not helpful ${votes.notHelpful}\nRepository Context\nFocus: ${repository.lastFocus}\nDependencies: ${repository.lastDependencies}\nLast files included: ${repository.lastFiles}\nLast chars: ${repository.lastCharacters}\nLast build time: ${repository.lastDurationMs} ms\nTimeouts: ${repository.timedOut}\nStreaming\nStarted: ${streaming.streamsStarted}\nSucceeded: ${streaming.streamsSucceeded}\nFallback: ${streaming.streamsFallback}\nAverage first chunk: ${ttfb} ms\nPrivacy: no source code, file path, token, or repository snippet included.`;
 }

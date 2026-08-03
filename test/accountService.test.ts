@@ -60,3 +60,11 @@ test("account status resolves account, entitlements, and installations", async (
   assert.equal(status?.entitlements.limits.remaining, 1997);
   assert.equal(status?.installations.length, 1);
 });
+
+test("account service revokes an installation with refreshed account access", async () => {
+  let revoked = "";
+  const api = client(); api.revokeAccountInstallation = async (_access, installation) => { revoked = installation; };
+  const store = credentials(); await store.setAccountTokens("access", "refresh");
+  await new AccountService(api, store).revokeInstallation("installation-1");
+  assert.equal(revoked, "installation-1");
+});

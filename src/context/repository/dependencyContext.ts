@@ -10,7 +10,15 @@ export function relevantDependencies(packageJSON: string, source: string): strin
     .filter((name): name is string => name !== undefined && declared.has(name));
   const hasClassContext = /\b(?:className|class|@apply)\b/.test(source);
   const tailwind = hasClassContext && declared.has("tailwindcss") ? ["tailwindcss"] : [];
-  return [...new Set([...imported, ...tailwind])].sort().slice(0, dependencyLimit);
+  const ecosystemSignals: Array<[RegExp, string[]]> = [
+    [/(?:<[A-Z]|\buse(?:State|Effect|Memo|Callback)\b|\bReact\.)/, ["react", "next"]],
+    [/(?:\bdefineComponent\b|\bref\(|<template>)/, ["vue", "nuxt"]],
+    [/(?:\bonMount\b|\$:\s|<svelte:)/, ["svelte", "@sveltejs/kit"]],
+    [/(?:@Component\b|\bNgModule\b)/, ["@angular/core"]],
+    [/(?:\bdescribe\(|\bit\(|\bexpect\()/, ["vitest", "jest"]],
+  ];
+  const ecosystem = ecosystemSignals.flatMap(([pattern, packages]) => pattern.test(source) ? packages.filter((name) => declared.has(name)) : []);
+  return [...new Set([...imported, ...tailwind, ...ecosystem])].sort().slice(0, dependencyLimit);
 }
 
 function packageName(specifier: string): string | undefined {

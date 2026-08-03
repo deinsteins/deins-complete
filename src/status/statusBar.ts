@@ -23,7 +23,20 @@ export class DeinsCompleteStatusBar implements vscode.Disposable {
     this.item.show();
   }
 
-  setActivity(text: "Thinking…" | "Cached" | "Offline" | "Ready"): void { if (text === "Ready") return; this.item.text = `$(sync~spin) DeinsComplete: ${text}`; this.item.tooltip = "DeinsComplete inline completion in progress"; this.item.command = undefined; this.item.show(); }
+  setActivity(text: "Thinking…" | "Cached" | "Offline" | "Ready"): void {
+    const icon = text === "Thinking…" ? "$(sync~spin)" : text === "Cached" ? "$(database)" : text === "Offline" ? "$(warning)" : "$(check)";
+    this.item.text = `${icon} DeinsComplete: ${text}`;
+    this.item.tooltip = text === "Offline" ? "The DeinsComplete backend is temporarily unavailable. Completion will retry automatically." : text === "Thinking…" ? "Generating an inline completion…" : `DeinsComplete ${text.toLowerCase()}`;
+    this.item.command = text === "Thinking…" ? undefined : "deinscomplete.accountCenter";
+    this.item.show();
+  }
+
+  setQuotaExceeded(): void {
+    this.item.text = "$(warning) DeinsComplete: Quota used";
+    this.item.tooltip = "Monthly completion quota is exhausted. Open Account Center for details.";
+    this.item.command = "deinscomplete.accountCenter";
+    this.item.show();
+  }
 
   dispose(): void { this.item.dispose(); }
 }

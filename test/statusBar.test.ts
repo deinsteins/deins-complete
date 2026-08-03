@@ -2,11 +2,11 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { getStatusBarPresentation } from "../src/status/statusPresentation";
 
-test("enabled status bar presentation disables DeinsComplete", () => {
+test("enabled status bar presentation opens Account Center", () => {
   assert.deepEqual(getStatusBarPresentation("enabled"), {
     text: "$(sparkle) DeinsComplete",
     tooltip: "DeinsComplete is enabled",
-    command: "deinscomplete.disable",
+    command: "deinscomplete.accountCenter",
   });
 });
 

@@ -1,8 +1,17 @@
 .vscode/**
+.github/**
 .gitignore
+api/**
+contracts/**
+docs/**
+scripts/**
 src/**
 test/**
+out/test/**
 tsconfig.json
 .eslintrc.json
 node_modules/**
 graphify-out/**
+.env
+.env.*
+*.vsix

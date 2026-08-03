@@ -13,7 +13,9 @@ DeinsComplete suggests code directly at your cursor as ghost text. Press `Tab` t
 3. Open the Command Palette (`Ctrl+Shift+P`) and run **DeinsComplete: Check Backend**.
 4. Start typing code. When a suggestion appears, press `Tab` to accept it.
 
-The extension connects to the managed DeinsComplete backend automatically. You do not need to configure an AI provider, model, API key, or provider URL. An account is optional: completions work as anonymous Free access on first run, while signing in links the installation for shared plan usage across devices.
+Run **DeinsComplete: Welcome & Getting Started** at any time for the interactive guide. The status-bar item opens **Account Center**, where signed-in users can see remaining quota and revoke linked installations.
+
+The extension connects to the managed DeinsComplete backend automatically. You do not need to configure an AI provider, model, API key, or provider URL. Private-beta deployments may require sign-in before completion; once signed in, the installation is linked for shared plan usage across devices.
 
 ## Try it
 
@@ -50,6 +52,10 @@ Use **DeinsComplete: Disable** or **DeinsComplete: Enable** to control inline su
 | `DeinsComplete: Sign In` | Starts optional account sign-in and links this installation. |
 | `DeinsComplete: Sign Out` | Removes locally stored account credentials; the installation credential remains. |
 | `DeinsComplete: Account Status` | Shows account plan and current monthly usage without exposing credentials. |
+| `DeinsComplete: Open Account Center` | Opens plan, quota, feature, and installation management. |
+| `DeinsComplete: Trigger Inline Completion` | Requests native ghost text at the current cursor. |
+| `DeinsComplete: Report Bad Suggestion` | Copies a privacy-safe feedback report without source code. |
+| `DeinsComplete: Copy Privacy-Safe Diagnostics` | Copies diagnostics suitable for a beta issue report. |
 
 ## Troubleshooting
 
