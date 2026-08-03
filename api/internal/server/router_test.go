@@ -29,7 +29,7 @@ func (providerErrorProvider) Complete(context.Context, completion.Request) (comp
 
 func testRouter() http.Handler {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	return newRouter(logger, completion.NewService(providers.MockProvider{}), auth.New("", 1, 0), false, false, nil, nil, nil, nil, nil, nil, nil, false, "")
+	return newRouter(logger, completion.NewService(providers.MockProvider{}), auth.New("", 1, 0), false, false, nil, nil, nil, nil, nil, nil, nil, false, "", false)
 }
 
 func TestHealthAndReady(t *testing.T) {
@@ -105,7 +105,7 @@ func TestMethodNotAllowedReturnsJSON(t *testing.T) {
 
 func TestProviderErrorsUseSafeAPIResponses(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	router := newRouter(logger, completion.NewService(providerErrorProvider{}), auth.New("", 1, 0), false, false, nil, nil, nil, nil, nil, nil, nil, false, "")
+	router := newRouter(logger, completion.NewService(providerErrorProvider{}), auth.New("", 1, 0), false, false, nil, nil, nil, nil, nil, nil, nil, false, "", false)
 	body := `{"context":{"prefix":"const user =","suffix":"","language":"typescript","filePath":"test.ts","cursorOffset":12}}`
 	response := httptest.NewRecorder()
 	router.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/v1/completions", strings.NewReader(body)))
@@ -125,7 +125,7 @@ func TestOversizedCompletionBody(t *testing.T) {
 func TestAuthenticatedCompletionAndRegistration(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	service := auth.New("01234567890123456789012345678901", 1, 0)
-	router := newRouter(logger, completion.NewService(providers.MockProvider{}), service, true, false, nil, nil, nil, nil, nil, nil, nil, false, "")
+	router := newRouter(logger, completion.NewService(providers.MockProvider{}), service, true, false, nil, nil, nil, nil, nil, nil, nil, false, "", false)
 	registration := httptest.NewRecorder()
 	router.ServeHTTP(registration, httptest.NewRequest(http.MethodPost, "/v1/installations/register", strings.NewReader(`{"installationId":"installation-1"}`)))
 	if registration.Code != http.StatusOK {
@@ -190,7 +190,7 @@ func TestLinkedInstallationReachesCompletionAfterEntitlementResolution(t *testin
 
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	authService := auth.New("01234567890123456789012345678901", 1, 0)
-	router := newRouter(logger, completion.NewService(providers.MockProvider{}), authService, true, true, nil, nil, usage.NewMonthly(), nil, repo, nil, nil, true, "")
+	router := newRouter(logger, completion.NewService(providers.MockProvider{}), authService, true, true, nil, nil, usage.NewMonthly(), nil, repo, nil, nil, true, "", false)
 	token, err := authService.Issue(installation.InstallationKey)
 	if err != nil {
 		t.Fatal(err)
@@ -236,7 +236,7 @@ func TestAdminPanelRoutes(t *testing.T) {
 	})
 
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	router := newRouter(logger, completion.NewService(providers.MockProvider{}), auth.New("", 1, 0), false, false, nil, nil, usage.NewMonthly(), nil, repo, nil, nil, false, "admin-token-must-be-at-least-32-bytes")
+	router := newRouter(logger, completion.NewService(providers.MockProvider{}), auth.New("", 1, 0), false, false, nil, nil, usage.NewMonthly(), nil, repo, nil, nil, false, "admin-token-must-be-at-least-32-bytes", false)
 	unauthorized := httptest.NewRecorder()
 	router.ServeHTTP(unauthorized, httptest.NewRequest(http.MethodGet, "/v1/admin/overview", nil))
 	if unauthorized.Code != http.StatusUnauthorized {
@@ -255,6 +255,9 @@ func TestAdminPanelRoutes(t *testing.T) {
 	if response := do(http.MethodGet, "/v1/admin/overview", ""); response.Code != http.StatusOK {
 		t.Fatalf("overview: %d %s", response.Code, response.Body.String())
 	}
+	if response := do(http.MethodGet, "/v1/admin/quality?days=7", ""); response.Code != http.StatusOK {
+		t.Fatalf("quality: %d %s", response.Code, response.Body.String())
+	}
 	if response := do(http.MethodPost, "/v1/admin/invites", `{"email":"invite@example.test","days":3}`); response.Code != http.StatusCreated || !strings.Contains(response.Body.String(), `"code"`) {
 		t.Fatalf("create invite: %d %s", response.Code, response.Body.String())
 	}
@@ -266,9 +269,55 @@ func TestAdminPanelRoutes(t *testing.T) {
 	}
 }
 
+func TestQualityEventsRequireInstallationAuthAndAreIdempotent(t *testing.T) {
+	databaseURL := os.Getenv("DATABASE_URL")
+	if databaseURL == "" {
+		t.Skip("DATABASE_URL is not configured")
+	}
+	pool, err := pgxpool.New(context.Background(), databaseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer pool.Close()
+	repo := account.NewRepository(pool)
+	installation, err := repo.EnsureInstallation(context.Background(), uuid.NewString())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		_, _ = pool.Exec(context.Background(), `DELETE FROM installations WHERE id=$1`, installation.ID)
+	})
+	authService := auth.New("01234567890123456789012345678901", 1, 0)
+	token, err := authService.Issue(installation.InstallationKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	router := newRouter(slog.New(slog.NewTextHandler(io.Discard, nil)), completion.NewService(providers.MockProvider{}), authService, true, false, nil, nil, nil, nil, repo, nil, nil, false, "", true)
+	completionID, eventID := uuid.NewString(), uuid.NewString()
+	body := `{"eventId":"` + eventID + `","completionId":"` + completionID + `","type":"shown","requestId":"safe-request","language":"typescriptreact","framework":"react","focus":"component-props","mode":"full","source":"backend","latencyMs":123}`
+	missing := httptest.NewRecorder()
+	router.ServeHTTP(missing, httptest.NewRequest(http.MethodPost, "/v1/quality/events", strings.NewReader(body)))
+	if missing.Code != http.StatusUnauthorized {
+		t.Fatalf("missing auth: %d", missing.Code)
+	}
+	for attempt := 0; attempt < 2; attempt++ {
+		request := httptest.NewRequest(http.MethodPost, "/v1/quality/events", strings.NewReader(body))
+		request.Header.Set("Authorization", "Bearer "+token)
+		response := httptest.NewRecorder()
+		router.ServeHTTP(response, request)
+		if response.Code != http.StatusNoContent {
+			t.Fatalf("attempt %d: %d %s", attempt, response.Code, response.Body.String())
+		}
+	}
+	var count int
+	if err := pool.QueryRow(context.Background(), `SELECT count(*) FROM quality_events WHERE completion_id=$1`, completionID).Scan(&count); err != nil || count != 1 {
+		t.Fatalf("expected one idempotent event, count=%d err=%v", count, err)
+	}
+}
+
 func TestStreamingCompletionEndpoint(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	router := newRouter(logger, completion.NewService(providers.MockProvider{}), auth.New("", 1, 0), false, true, nil, nil, nil, nil, nil, nil, nil, false, "")
+	router := newRouter(logger, completion.NewService(providers.MockProvider{}), auth.New("", 1, 0), false, true, nil, nil, nil, nil, nil, nil, nil, false, "", false)
 	body := `{"context":{"prefix":"const user =","suffix":"","language":"typescript","filePath":"test.ts","cursorOffset":12}}`
 	response := httptest.NewRecorder()
 	router.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/v1/completions/stream", strings.NewReader(body)))

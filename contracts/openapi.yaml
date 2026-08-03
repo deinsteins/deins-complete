@@ -150,6 +150,23 @@ paths:
         '400': { $ref: '#/components/responses/InvalidRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '429': { $ref: '#/components/responses/CompletionLimited' }
+  /v1/quality/events:
+    post:
+      summary: Record an opt-in, privacy-safe completion outcome event.
+      description: Accepts shown and accepted outcomes only. Source code, file paths, repository snippets, provider identity, account email, and credentials are not accepted.
+      security:
+        - InstallationBearerAuth: []
+        - InstallationTokenAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/QualityEvent' }
+      responses:
+        '204': { description: Event recorded or already recorded. }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
   /v1/installations/link:
     post:
       summary: Link the authenticated installation to the authenticated account.
@@ -223,6 +240,21 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
 components:
   schemas:
+    QualityEvent:
+      type: object
+      additionalProperties: false
+      required: [eventId, completionId, type, language, framework, focus, mode, source, latencyMs]
+      properties:
+        eventId: { type: string, format: uuid }
+        completionId: { type: string, format: uuid }
+        type: { type: string, enum: [shown, accepted] }
+        requestId: { type: string, maxLength: 128 }
+        language: { type: string, pattern: '^[a-z0-9][a-z0-9+.#_-]{0,39}$' }
+        framework: { type: string, pattern: '^[a-z0-9][a-z0-9+.#_-]{0,39}$' }
+        focus: { type: string, pattern: '^[a-z0-9][a-z0-9+.#_-]{0,39}$' }
+        mode: { type: string, enum: [fast, full] }
+        source: { type: string, enum: [backend, cache] }
+        latencyMs: { type: integer, minimum: 0, maximum: 30000 }
     MagicCodeRequest:
       type: object
       required: [email]

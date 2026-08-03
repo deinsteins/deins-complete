@@ -108,3 +108,18 @@ test("client supports the separate magic-code account authentication contract", 
   assert.equal(calls[2].url, "http://127.0.0.1:3001/v1/account/entitlements");
   assert.equal((calls[3].headers as Record<string, string>)["X-DeinsComplete-Installation-Token"], "installation-token");
 });
+
+test("quality events use installation auth without changing completion availability", async () => {
+  const calls: string[] = [];
+  const client = new DeinsCompleteClient(settings, async (url, init) => {
+    calls.push(url);
+    if (url.endsWith("/quality/events")) {
+      assert.equal((init?.headers as Record<string, string>).Authorization, "Bearer installation-token");
+      return response(503, { error: { code: "SERVICE_UNAVAILABLE" } });
+    }
+    return response(200, { completion: { text: "ok" } });
+  }, undefined, "0.0.1", async () => "installation-token");
+  await assert.rejects(() => client.sendQualityEvent({ eventId: "event", completionId: "completion", type: "shown", language: "ts", framework: "none", focus: "general", mode: "fast", source: "backend", latencyMs: 1 }));
+  assert.equal((await client.complete(request, new AbortController().signal)).completion.text, "ok");
+  assert.equal(calls.length, 2);
+});

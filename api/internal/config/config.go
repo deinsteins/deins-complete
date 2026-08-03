@@ -43,6 +43,7 @@ type Config struct {
 	Database    DatabaseConfig
 	Account     AccountConfig
 	Admin       AdminConfig
+	Quality     QualityConfig
 }
 type RouterConfig struct {
 	FallbackEnabled bool
@@ -90,6 +91,10 @@ type AdminConfig struct {
 	Enabled bool
 	Token   string
 }
+type QualityConfig struct {
+	Enabled       bool
+	RetentionDays int
+}
 
 func Load() (Config, error) {
 	return parse(os.Getenv)
@@ -122,6 +127,7 @@ func parse(lookup func(string) string) (Config, error) {
 		Database:   DatabaseConfig{Enabled: lookup("DATABASE_ENABLED") == "true", URL: lookup("DATABASE_URL"), MaxOpenConns: 10, MaxIdleConns: 5, ConnMaxLifetime: 30 * time.Minute},
 		Account:    AccountConfig{Required: lookup("ACCOUNT_REQUIRED") == "true", RegistrationMode: valueOrDefault(lookup("REGISTRATION_MODE"), "invite"), AccessTokenSecret: lookup("ACCOUNT_ACCESS_TOKEN_SECRET"), AccessTokenTTL: 30 * time.Minute, RefreshTokenTTL: 30 * 24 * time.Hour, MagicCodeTTL: 15 * time.Minute, SMTPAddr: lookup("ACCOUNT_SMTP_ADDR"), SMTPFrom: lookup("ACCOUNT_SMTP_FROM"), SMTPUsername: lookup("ACCOUNT_SMTP_USERNAME"), SMTPPassword: lookup("ACCOUNT_SMTP_PASSWORD")},
 		Admin:      AdminConfig{Enabled: lookup("ADMIN_ENABLED") == "true", Token: lookup("ADMIN_TOKEN")},
+		Quality:    QualityConfig{Enabled: lookup("QUALITY_EVENTS_ENABLED") == "true", RetentionDays: 30},
 	}
 	if config.Redis.Enabled && config.Redis.Addr == "" {
 		return Config{}, fmt.Errorf("REDIS_ADDR is required when REDIS_ENABLED=true")
@@ -172,6 +178,9 @@ func parse(lookup func(string) string) (Config, error) {
 	if err := parseAdminConfig(&config); err != nil {
 		return Config{}, err
 	}
+	if err := parseQualityConfig(&config, lookup); err != nil {
+		return Config{}, err
+	}
 	if err := parseAdmissionConfig(&config, lookup); err != nil {
 		return Config{}, err
 	}
@@ -182,6 +191,20 @@ func parse(lookup func(string) string) (Config, error) {
 		return Config{}, err
 	}
 	return config, nil
+}
+
+func parseQualityConfig(config *Config, lookup func(string) string) error {
+	if raw := lookup("QUALITY_EVENTS_RETENTION_DAYS"); raw != "" {
+		value, err := strconv.Atoi(raw)
+		if err != nil || value < 1 || value > 365 {
+			return fmt.Errorf("invalid QUALITY_EVENTS_RETENTION_DAYS value: %s", raw)
+		}
+		config.Quality.RetentionDays = value
+	}
+	if config.Quality.Enabled && (!config.Database.Enabled || !config.Auth.Enabled) {
+		return fmt.Errorf("DATABASE_ENABLED and AUTH_ENABLED must be true when QUALITY_EVENTS_ENABLED=true")
+	}
+	return nil
 }
 
 func parseAdminConfig(config *Config) error {

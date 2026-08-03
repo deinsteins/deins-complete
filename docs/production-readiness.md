@@ -1,5 +1,9 @@
 # Production readiness
 
+- [ ] Quality events remain disabled unless the controlled beta explicitly needs them.
+- [ ] If enabled, retention is reviewed and the aggregate dashboard remains protected by `ADMIN_TOKEN`.
+- [ ] Quality event storage contains no source code, completion text, file paths, repository snippets, email, or credentials.
+
 - [ ] `APP_ENV=production`, installation authentication, rate limiting, daily abuse guard, and plan quota are enabled.
 - [ ] `AUTH_TOKEN_SECRET` is high entropy and not committed.
 - [ ] `DATABASE_ENABLED=true` has a reachable PostgreSQL `DATABASE_URL`; `/ready` fails closed if this required dependency is unavailable while `/health` remains process-only.

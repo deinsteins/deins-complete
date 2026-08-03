@@ -73,6 +73,15 @@ func (h *AdminHandler) Invites(w http.ResponseWriter, r *http.Request) {
 	}
 	response.WriteJSON(w, http.StatusOK, items)
 }
+func (h *AdminHandler) Quality(w http.ResponseWriter, r *http.Request) {
+	days, _ := strconv.Atoi(r.URL.Query().Get("days"))
+	quality, err := h.repo.AdminQuality(r.Context(), days)
+	if err != nil {
+		response.WriteError(w, http.StatusServiceUnavailable, "SERVICE_UNAVAILABLE", "Service temporarily unavailable.", middleware.GetRequestID(r.Context()))
+		return
+	}
+	response.WriteJSON(w, http.StatusOK, quality)
+}
 func (h *AdminHandler) CreateInvite(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, 16<<10)
 	var body struct {
@@ -138,6 +147,7 @@ const adminHTML = `<!doctype html>
 <main>
 <div class="auth"><input id="token" type="password" placeholder="Admin token" autocomplete="current-password"><button class="primary" onclick="saveToken()">Unlock</button><button onclick="logout()">Lock</button></div>
 <div class="grid" id="summary"></div>
+<section class="section"><h2>Completion quality <span class="muted">(privacy-safe aggregates)</span></h2><div class="toolbar"><label for="qualityDays" class="muted">Window</label><select id="qualityDays" onchange="loadQuality()"><option value="7">7 days</option><option value="30">30 days</option><option value="90">90 days</option></select></div><div class="grid" id="qualitySummary"></div><table><thead><tr><th>Dimension</th><th>Value</th><th>Shown</th><th>Accepted</th><th>Acceptance</th></tr></thead><tbody id="qualityDimensions"></tbody></table></section>
 <section class="section"><h2>Users</h2><div class="toolbar"><input id="query" placeholder="Search email"><button onclick="loadAll()">Search</button><input id="inviteEmail" placeholder="Invite email"><input id="inviteDays" type="number" min="1" max="30" value="7"><button class="primary" onclick="createInvite()">Create invite</button></div><table><thead><tr><th>Email</th><th>Plan</th><th>Usage</th><th>Installations</th><th>Last seen</th><th class="right">Action</th></tr></thead><tbody id="users"></tbody></table></section>
 <section class="section"><h2>Installations</h2><table><thead><tr><th>ID</th><th>User</th><th>Status</th><th>Last seen</th><th class="right">Action</th></tr></thead><tbody id="installations"></tbody></table></section>
 <section class="section"><h2>Invites</h2><div class="toolbar hidden" id="newInvite"></div><table><thead><tr><th>Email</th><th>Expires</th><th>Used</th><th>Created</th></tr></thead><tbody id="invites"></tbody></table></section>
@@ -149,8 +159,10 @@ const esc=x=>String(x??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&
 async function api(path,options={}){const r=await fetch(path,{...options,headers:{"Authorization":"Bearer "+token,"Content-Type":"application/json",...(options.headers||{})}});if(!r.ok)throw new Error((await r.json().catch(()=>({error:{message:r.statusText}}))).error.message);return r.status===204?null:r.json()}
 function saveToken(){token=document.getElementById("token").value.trim();sessionStorage.setItem("deinscomplete.adminToken",token);loadAll()}
 function logout(){sessionStorage.removeItem("deinscomplete.adminToken");token="";document.getElementById("state").textContent="Locked"}
-async function loadAll(){try{document.getElementById("state").textContent="Loading";const [s,u,i,v]=await Promise.all([api("/v1/admin/overview"),api("/v1/admin/users?q="+encodeURIComponent(document.getElementById("query").value)),api("/v1/admin/installations"),api("/v1/admin/invites")]);summary(s);users(u);installations(i);invites(v);document.getElementById("state").textContent="Ready"}catch(e){document.getElementById("state").textContent=e.message}}
+async function loadAll(){try{document.getElementById("state").textContent="Loading";const [s,u,i,v,q]=await Promise.all([api("/v1/admin/overview"),api("/v1/admin/users?q="+encodeURIComponent(document.getElementById("query").value)),api("/v1/admin/installations"),api("/v1/admin/invites"),api("/v1/admin/quality?days="+document.getElementById("qualityDays").value)]);summary(s);users(u);installations(i);invites(v);quality(q);document.getElementById("state").textContent="Ready"}catch(e){document.getElementById("state").textContent=e.message}}
 function summary(s){document.getElementById("summary").innerHTML=[["Users",s.Users],["Linked installations",s.LinkedInstallations],["Active installations",s.ActiveInstallations],["Pending invites",s.PendingInvites]].map(x=>"<div class=\"metric\"><span>"+x[0]+"</span><b>"+x[1]+"</b></div>").join("")}
+async function loadQuality(){try{quality(await api("/v1/admin/quality?days="+document.getElementById("qualityDays").value))}catch(e){document.getElementById("state").textContent=e.message}}
+function quality(q){const s=q.Summary;document.getElementById("qualitySummary").innerHTML=[["Shown",s.Shown],["Accepted",s.Accepted],["Acceptance",Math.round(s.AcceptanceRate*100)+"%"],["p95 latency",Math.round(s.P95LatencyMS)+" ms"]].map(x=>"<div class=\"metric\"><span>"+x[0]+"</span><b>"+x[1]+"</b></div>").join("");document.getElementById("qualityDimensions").innerHTML=(q.Dimensions||[]).map(x=>"<tr><td>"+esc(x.Kind)+"</td><td class=\"code\">"+esc(x.Value)+"</td><td>"+x.Shown+"</td><td>"+x.Accepted+"</td><td>"+Math.round(x.AcceptanceRate*100)+"%</td></tr>").join("")}
 function users(rows){document.getElementById("users").innerHTML=rows.map(u=>"<tr><td>"+esc(u.Email)+"<div class=\"muted code\">"+esc(u.ID)+"</div></td><td><select onchange=\"setPlan('"+esc(u.ID)+"',this.value)\"><option "+(u.Plan==="free"?"selected":"")+">free</option><option "+(u.Plan==="pro"?"selected":"")+">pro</option></select></td><td>"+u.MonthlyUsed+"</td><td>"+u.Installations+"</td><td>"+fmt(u.LastSeenAt)+"</td><td class=\"right\"><button onclick=\"loadUserInstallations('"+esc(u.ID)+"')\">Devices</button></td></tr>").join("")}
 function installations(rows){document.getElementById("installations").innerHTML=rows.map(i=>"<tr><td class=\"code\">"+esc(i.ID)+"</td><td>"+esc(i.Email||"-")+"</td><td>"+esc(i.Status)+"</td><td>"+fmt(i.LastSeenAt)+"</td><td class=\"right\">"+(i.Status==="active"?"<button class=\"bad\" onclick=\"revokeInstallation('"+esc(i.ID)+"')\">Revoke</button>":"")+"</td></tr>").join("")}
 function invites(rows){document.getElementById("invites").innerHTML=rows.map(i=>"<tr><td>"+esc(i.Email||"-")+"</td><td>"+fmt(i.ExpiresAt)+"</td><td>"+fmt(i.UsedAt)+"</td><td>"+fmt(i.CreatedAt)+"</td></tr>").join("")}

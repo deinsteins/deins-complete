@@ -39,6 +39,15 @@ ADMIN_TOKEN=<openssl rand -hex 32>
 
 The panel can list users, create invite codes, change Free/Pro plans, inspect installations, and revoke installations. Do not put `ADMIN_TOKEN` in GitHub Actions, the VS Code extension, or client-side settings.
 
+The completion-quality dashboard is opt-in. To run a controlled beta, add:
+
+```env
+QUALITY_EVENTS_ENABLED=true
+QUALITY_EVENTS_RETENTION_DAYS=30
+```
+
+Run the database migration before restarting the API, then ask selected testers to enable `deinscomplete.qualityInsights.enabled`. Leave the server flag false outside the experiment. The endpoint accepts bounded outcome metadata only and is installation-authenticated plus rate-limited.
+
 Deploy an immutable image:
 
 ```bash

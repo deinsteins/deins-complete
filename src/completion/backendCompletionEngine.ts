@@ -26,7 +26,7 @@ export class BackendCompletionEngine implements CompletionEngine {
       this.stats.lastRequestId = response.requestId ?? response.metadata?.requestId;
       this.stats.lastError = undefined;
       this.onAvailability?.("ready");
-      return this.result(response.completion.text);
+      return this.result(response.completion.text, response.requestId ?? response.metadata?.requestId, started);
     } catch (error) {
       if (error instanceof AccountRequiredError) {
         this.logger.debug("Backend account sign-in required");
@@ -41,7 +41,7 @@ export class BackendCompletionEngine implements CompletionEngine {
           this.stats.lastRequestId = response.requestId ?? response.metadata?.requestId;
           this.stats.lastError = undefined;
           this.onAvailability?.("ready");
-          return this.result(response.completion.text);
+          return this.result(response.completion.text, response.requestId ?? response.metadata?.requestId, started);
         } catch (refreshError) {
           if (refreshError instanceof CancelledError || signal.aborted) return null;
           this.logger.debug(`Backend authentication refresh failed${safeErrorDetails(refreshError)}`);
@@ -76,9 +76,9 @@ export class BackendCompletionEngine implements CompletionEngine {
   }
   getStats() { return { ...this.stats }; }
 
-  private result(text: string): CompletionResult | null {
+  private result(text: string, requestId: string | undefined, started: number): CompletionResult | null {
     this.onCompletionSucceeded?.();
-    return text === "" ? null : { text };
+    return text === "" ? null : { text, requestId, source: "backend", latencyMs: Math.min(30000, Math.max(0, Math.round(performance.now() - started))) };
   }
 
   private async completeRequest(request: CompletionRequest, signal: AbortSignal) {

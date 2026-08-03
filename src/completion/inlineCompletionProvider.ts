@@ -11,6 +11,7 @@ import { EditorStateSnapshot, isCurrentEditorState } from "./editorState";
 import { AutoImportResolver } from "./autoImportResolver";
 import { FeedbackService } from "../feedback/feedbackService";
 import { completionFocus } from "./contextComplexity";
+import { QualityReporter } from "../feedback/qualityReporter";
 
 export class DeinsCompleteInlineCompletionProvider implements vscode.InlineCompletionItemProvider {
   constructor(
@@ -21,6 +22,7 @@ export class DeinsCompleteInlineCompletionProvider implements vscode.InlineCompl
     private readonly logger: Logger,
     private readonly autoImports: AutoImportResolver,
     private readonly feedback: FeedbackService,
+    private readonly quality: QualityReporter,
     private readonly canComplete: () => Promise<boolean> = async () => true,
   ) {}
 
@@ -59,11 +61,12 @@ export class DeinsCompleteInlineCompletionProvider implements vscode.InlineCompl
       this.logger.debug("Inline completion produced result");
       const focus = completionFocus(request);
       this.feedback.recordShown(focus);
+      const quality = this.quality.shown(request, result);
       const prefetchedImport = this.autoImports.getPrefetched(document, position, result.text);
       const command = {
         command: "deinscomplete.completionAccepted",
         title: "Record completion acceptance",
-        arguments: [focus, prefetchedImport, document.uri, position, this.autoImports.canResolve(result.text) ? result.text : undefined],
+        arguments: [focus, prefetchedImport, document.uri, position, this.autoImports.canResolve(result.text) ? result.text : undefined, quality],
       };
       return [new vscode.InlineCompletionItem(result.text, new vscode.Range(position, position), command)];
     } catch (error) {

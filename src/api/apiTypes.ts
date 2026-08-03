@@ -65,3 +65,16 @@ export interface AccountInstallation {
   createdAt: string;
   lastSeenAt?: string;
 }
+
+export interface QualityEvent {
+  eventId: string;
+  completionId: string;
+  type: "shown" | "accepted";
+  requestId?: string;
+  language: string;
+  framework: string;
+  focus: string;
+  mode: "fast" | "full";
+  source: "backend" | "cache";
+  latencyMs: number;
+}

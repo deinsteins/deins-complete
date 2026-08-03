@@ -9,4 +9,7 @@ export interface CompletionRequest extends CompletionContext {
 
 export interface CompletionResult {
   text: string;
+  requestId?: string;
+  source?: "backend" | "cache";
+  latencyMs?: number;
 }

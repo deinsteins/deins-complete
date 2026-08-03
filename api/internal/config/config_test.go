@@ -164,3 +164,34 @@ func TestParseAdminConfiguration(t *testing.T) {
 		t.Fatal("expected weak admin token error")
 	}
 }
+
+func TestParseQualityEventsConfiguration(t *testing.T) {
+	values := map[string]string{
+		"AUTH_ENABLED":                  "true",
+		"AUTH_TOKEN_SECRET":             "01234567890123456789012345678901",
+		"DATABASE_ENABLED":              "true",
+		"DATABASE_URL":                  "postgres://user:password@localhost/deinscomplete",
+		"ACCOUNT_ACCESS_TOKEN_SECRET":   "01234567890123456789012345678901",
+		"QUALITY_EVENTS_ENABLED":        "true",
+		"QUALITY_EVENTS_RETENTION_DAYS": "45",
+	}
+	configuration, err := parse(func(key string) string { return values[key] })
+	if err != nil || !configuration.Quality.Enabled || configuration.Quality.RetentionDays != 45 {
+		t.Fatalf("unexpected quality configuration: %#v %v", configuration.Quality, err)
+	}
+	values["QUALITY_EVENTS_RETENTION_DAYS"] = "0"
+	if _, err := parse(func(key string) string { return values[key] }); err == nil {
+		t.Fatal("expected invalid quality retention error")
+	}
+}
+
+func TestQualityEventsRequireDatabaseAndAuthentication(t *testing.T) {
+	if _, err := parse(func(key string) string {
+		if key == "QUALITY_EVENTS_ENABLED" {
+			return "true"
+		}
+		return ""
+	}); err == nil {
+		t.Fatal("expected quality dependency validation error")
+	}
+}

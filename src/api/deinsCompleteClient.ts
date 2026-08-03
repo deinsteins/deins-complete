@@ -8,6 +8,7 @@ import {
   AccountTokens,
   BackendHealthResult,
   BackendSettingsProvider,
+  QualityEvent,
 } from "./apiTypes";
 import {
 	AccountRequiredError,
@@ -32,6 +33,7 @@ export interface BackendClient {
   complete(request: ApiCompletionRequest, signal: AbortSignal): Promise<ApiCompletionResponse>;
   streamComplete?(request: ApiCompletionRequest, signal: AbortSignal): Promise<ApiCompletionResponse>;
   health(signal?: AbortSignal): Promise<BackendHealthResult>;
+  sendQualityEvent?(event: QualityEvent, signal?: AbortSignal): Promise<void>;
 }
 
 export interface AccountApiClient {
@@ -143,6 +145,14 @@ export class DeinsCompleteClient implements BackendClient, AccountApiClient {
     if (!isRecord(payload) || typeof payload.accountRequired !== "boolean") throw new InvalidResponseError("Account requirement response is invalid.");
     return payload.accountRequired;
   }
+  async sendQualityEvent(event: QualityEvent, signal?: AbortSignal): Promise<void> {
+    const response = await this.send("/v1/quality/events", {
+      method: "POST",
+      headers: await this.headers({ "Content-Type": "application/json", Accept: "application/json" }),
+      body: JSON.stringify(event),
+    }, signal, false);
+    if (response.status !== 204) throw new InvalidResponseError("Quality event response is invalid.", this.requestId(response));
+  }
 
   async health(signal?: AbortSignal): Promise<BackendHealthResult> {
     const startedAt = Date.now();
@@ -154,7 +164,7 @@ export class DeinsCompleteClient implements BackendClient, AccountApiClient {
     return { healthy: true, latencyMs: Date.now() - startedAt, requestId: this.requestId(response) };
   }
 
-  private async send(path: string, init: RequestInit, signal?: AbortSignal): Promise<Response> {
+  private async send(path: string, init: RequestInit, signal?: AbortSignal, affectAvailability = true): Promise<Response> {
     const backendUrl = normalizeBackendUrl(this.settings.getBackendUrl());
     if (backendUrl === null) {
       throw new ConfigurationError("Backend URL is invalid.");
@@ -164,9 +174,9 @@ export class DeinsCompleteClient implements BackendClient, AccountApiClient {
       const response = await this.fetchFunction(`${backendUrl}${path}`, { ...init, signal: cancellation.signal });
       if (!response.ok) {
         const error = await statusError(response, this.requestId(response));
-        if (error instanceof RateLimitError || error instanceof QuotaExceededError) {
+        if (affectAvailability && (error instanceof RateLimitError || error instanceof QuotaExceededError)) {
           this.unavailableUntil = Date.now() + (error.retryAfterSeconds ?? 1) * 1000;
-        } else if (error instanceof BackendUnavailableError && response.status === 503) {
+        } else if (affectAvailability && error instanceof BackendUnavailableError && response.status === 503) {
           this.unavailableUntil = Date.now() + 2_000;
         }
         throw error;

@@ -18,7 +18,7 @@ import (
 	"deinscomplete/api/internal/usage"
 )
 
-func newRouter(logger *slog.Logger, service *completion.Service, authService *auth.Service, enabled bool, streaming bool, limiter ratelimit.Limiter, tracker usage.Tracker, monthly usage.MonthlyTracker, readiness func(context.Context) error, repo *account.Repository, accounts *account.Service, accountTokens *accountauth.Service, accountRequired bool, adminToken string) http.Handler {
+func newRouter(logger *slog.Logger, service *completion.Service, authService *auth.Service, enabled bool, streaming bool, limiter ratelimit.Limiter, tracker usage.Tracker, monthly usage.MonthlyTracker, readiness func(context.Context) error, repo *account.Repository, accounts *account.Service, accountTokens *accountauth.Service, accountRequired bool, adminToken string, qualityEnabled bool) http.Handler {
 	router := chi.NewRouter()
 	router.Use(middleware.RequestID, middleware.Recovery(logger), middleware.Logging(logger))
 	router.Get("/", handlers.Root)
@@ -50,9 +50,18 @@ func newRouter(logger *slog.Logger, service *completion.Service, authService *au
 		router.With(admin).Get("/v1/admin/users", h.Users)
 		router.With(admin).Get("/v1/admin/installations", h.Installations)
 		router.With(admin).Get("/v1/admin/invites", h.Invites)
+		router.With(admin).Get("/v1/admin/quality", h.Quality)
 		router.With(admin).Post("/v1/admin/invites", h.CreateInvite)
 		router.With(admin).Post("/v1/admin/users/{id}/plan", h.SetPlan)
 		router.With(admin).Post("/v1/admin/installations/{id}/revoke", h.RevokeInstallation)
+	}
+	if qualityEnabled && repo != nil && enabled {
+		qualityHandler := handlers.NewQualityHandler(repo)
+		quality := http.Handler(http.HandlerFunc(qualityHandler.Record))
+		quality = middleware.InstallationStatus(repo)(quality)
+		quality = middleware.Auth(authService)(quality)
+		quality = middleware.PublicRateLimit(ratelimit.New(240, 40))(quality)
+		router.Post("/v1/quality/events", quality.ServeHTTP)
 	}
 	completionHandler := http.Handler(handlers.NewCompletionHandler(service, logger))
 	if enabled {

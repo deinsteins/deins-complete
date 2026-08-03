@@ -25,7 +25,11 @@ const logger = { debug: () => undefined };
 
 test("backend completion engine maps backend text", async () => {
   const engine = new BackendCompletionEngine(new TestClient({ completion: { text: "await getUser();" }, requestId: "req-safe" }), "0.0.1", logger);
-  assert.deepEqual(await engine.complete(request, new AbortController().signal), { text: "await getUser();" });
+  const result = await engine.complete(request, new AbortController().signal);
+  assert.equal(result?.text, "await getUser();");
+  assert.equal(result?.requestId, "req-safe");
+  assert.equal(result?.source, "backend");
+  assert.ok((result?.latencyMs ?? -1) >= 0);
   assert.equal(engine.getStats().lastRequestId, "req-safe");
 });
 
@@ -57,9 +61,9 @@ test("backend completion engine prefers streaming and falls back when unavailabl
     streamComplete: async () => ({ completion: { text: "streamed" } }),
     health: async () => ({ healthy: true, latencyMs: 1 }),
   };
-  assert.deepEqual(await new BackendCompletionEngine(streamClient, "0.0.1", logger).complete(request, new AbortController().signal), { text: "streamed" });
+  assert.equal((await new BackendCompletionEngine(streamClient, "0.0.1", logger).complete(request, new AbortController().signal))?.text, "streamed");
   const fallbackClient: BackendClient = { ...streamClient, streamComplete: async () => { throw new EndpointNotFoundError("not enabled"); } };
-  assert.deepEqual(await new BackendCompletionEngine(fallbackClient, "0.0.1", logger).complete(request, new AbortController().signal), { text: "standard" });
+  assert.equal((await new BackendCompletionEngine(fallbackClient, "0.0.1", logger).complete(request, new AbortController().signal))?.text, "standard");
   assert.equal(standardCalls, 1);
 });
 

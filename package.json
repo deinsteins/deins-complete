@@ -2,7 +2,7 @@
   "name": "deinscomplete",
   "displayName": "DeinsComplete",
   "description": "Fast AI-powered inline code completion for VS Code.",
-  "version": "0.1.13",
+  "version": "0.1.14",
   "publisher": "deinscomplete",
   "icon": "media/deinscomplete-icon.png",
   "repository": {
@@ -159,6 +159,11 @@
           "type": "boolean",
           "default": true,
           "description": "Use streaming completion when the managed backend supports it."
+        },
+        "deinscomplete.qualityInsights.enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Share privacy-safe completion outcome metadata (shown/accepted, latency, language and framework categories) to improve DeinsComplete. No source code, file paths, repository snippets, provider identity, email, or tokens are sent."
         },
         "deinscomplete.completion.debounceMs": {
           "type": "number",

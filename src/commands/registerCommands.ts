@@ -10,6 +10,7 @@ import { BackendCompletionEngine } from "../completion/backendCompletionEngine";
 import { FeedbackService } from "../feedback/feedbackService";
 import { AutoImportPlan, AutoImportResolver } from "../completion/autoImportResolver";
 import { AccountService } from "../account/accountService";
+import { QualityCompletion, QualityReporter } from "../feedback/qualityReporter";
 
 export function registerCommands(
   config: ConfigService,
@@ -21,6 +22,7 @@ export function registerCommands(
   repositoryContext: RepositoryContextBuilder,
   engine: BackendCompletionEngine,
   feedback: FeedbackService,
+  quality: QualityReporter,
   autoImports: AutoImportResolver,
   account: AccountService,
   refreshAccountStatus: () => Promise<void>,
@@ -43,14 +45,14 @@ export function registerCommands(
       let backend = "Unavailable";
       try { const health = await backendClient.health(); backend = `Reachable (${health.latencyMs} ms)`; } catch { /* diagnostic remains safe */ }
       const authentication = await installation.getToken() ? "Ready" : "Not registered";
-      const report = diagnosticReport(lifecycle, requests, repositoryContext, engine, feedback, backend, authentication);
+      const report = diagnosticReport(lifecycle, requests, repositoryContext, engine, feedback, backend, authentication, config.qualityInsightsEnabled());
       logger.info(report); void vscode.window.showInformationMessage(`DeinsComplete diagnostics: ${backend}`);
     }),
     vscode.commands.registerCommand("deinscomplete.copyDiagnostics", async () => {
       let backend = "Unavailable";
       try { const health = await backendClient.health(); backend = `Reachable (${health.latencyMs} ms)`; } catch { /* safe report retains unavailable */ }
       const authentication = await installation.getToken() ? "Ready" : "Not registered";
-      await vscode.env.clipboard.writeText(diagnosticReport(lifecycle, requests, repositoryContext, engine, feedback, backend, authentication));
+      await vscode.env.clipboard.writeText(diagnosticReport(lifecycle, requests, repositoryContext, engine, feedback, backend, authentication, config.qualityInsightsEnabled()));
       void vscode.window.showInformationMessage("Privacy-safe DeinsComplete diagnostics copied.");
     }),
     vscode.commands.registerCommand("deinscomplete.resetAuthentication", async () => {
@@ -101,7 +103,7 @@ export function registerCommands(
       if (reason === undefined) return;
       feedback.record("not-helpful");
       const authentication = await installation.getToken() ? "Ready" : "Not registered";
-      const report = `${diagnosticReport(lifecycle, requests, repositoryContext, engine, feedback, "Not checked", authentication)}\nFeedback reason: ${reason}`;
+      const report = `${diagnosticReport(lifecycle, requests, repositoryContext, engine, feedback, "Not checked", authentication, config.qualityInsightsEnabled())}\nFeedback reason: ${reason}`;
       await vscode.env.clipboard.writeText(report);
       logger.info(`Completion feedback=not-helpful reason=${reason.replace(/\s+/g, "-").toLowerCase()}`);
       void vscode.window.showInformationMessage("Privacy-safe feedback report copied. Paste it into your beta issue report.");
@@ -111,8 +113,9 @@ export function registerCommands(
     }),
     vscode.commands.registerCommand("deinscomplete.applyAutoImport", (uri: vscode.Uri, position: vscode.Position, completion: string) => autoImports.resolveAndApply(uri, position, completion).catch(() => logger.debug("Verified auto-import was not applied"))),
     vscode.commands.registerCommand("deinscomplete.applyPrefetchedAutoImport", (plan: AutoImportPlan) => autoImports.apply(plan).catch(() => logger.debug("Prefetched auto-import was not applied"))),
-    vscode.commands.registerCommand("deinscomplete.completionAccepted", (focus: string, plan?: AutoImportPlan, uri?: vscode.Uri, position?: vscode.Position, completion?: string) => {
+    vscode.commands.registerCommand("deinscomplete.completionAccepted", (focus: string, plan?: AutoImportPlan, uri?: vscode.Uri, position?: vscode.Position, completion?: string, qualityContext?: QualityCompletion) => {
       feedback.recordAccepted(focus);
+      quality.accepted(qualityContext);
       if (plan !== undefined) return autoImports.apply(plan).catch(() => logger.debug("Prefetched auto-import was not applied"));
       if (uri !== undefined && position !== undefined && completion !== undefined) return autoImports.resolveAndApply(uri, position, completion).catch(() => logger.debug("Verified auto-import was not applied"));
       return undefined;
@@ -139,6 +142,7 @@ function diagnosticReport(
   feedback: FeedbackService,
   backend: string,
   authentication: string,
+  qualityInsights: boolean,
 ): string {
   const stats = requests.getStats();
   const average = stats.requested ? Math.round(stats.totalLatencyMs / stats.requested) : 0;
@@ -151,5 +155,5 @@ function diagnosticReport(
   const acceptance = votes.shown ? Math.round(votes.accepted / votes.shown * 100) : 0;
   const language = vscode.window.activeTextEditor?.document.languageId ?? "none";
   const version = String(vscode.extensions.getExtension("deinscomplete.deinscomplete")?.packageJSON.version ?? "unknown");
-  return `DeinsComplete Diagnostics\nExtension: ${version}\nVS Code: ${vscode.version}\nEnvironment: ${vscode.env.remoteName ?? "local"} / ${process.platform}\nLanguage: ${language}\nStatus: ${lifecycle.getState()}\nBackend: ${backend}\nAuthentication: ${authentication}\nLast request ID: ${streaming.lastRequestId ?? "none"}\nLast backend result: ${streaming.lastError ?? "ok"}\nRequests: ${stats.requested}\nCache hits: ${stats.cacheHits}\nNegative cache hits: ${stats.negativeCacheHits}\nCancelled: ${stats.cancelled}\nLatency\nAverage debounce: ${averageDebounce} ms\nAverage backend: ${averageBackend} ms\nAverage total: ${average} ms\nLast backend: ${streaming.lastDurationMs} ms\nCompletion outcomes (local only)\nShown: ${votes.shown}\nAccepted: ${votes.accepted}\nAcceptance: ${acceptance}%\nManual feedback: helpful ${votes.helpful}, not helpful ${votes.notHelpful}\nRepository Context\nFocus: ${repository.lastFocus}\nDependencies: ${repository.lastDependencies}\nLast files included: ${repository.lastFiles}\nLast chars: ${repository.lastCharacters}\nLast build time: ${repository.lastDurationMs} ms\nTimeouts: ${repository.timedOut}\nStreaming\nStarted: ${streaming.streamsStarted}\nSucceeded: ${streaming.streamsSucceeded}\nFallback: ${streaming.streamsFallback}\nAverage first chunk: ${ttfb} ms\nPrivacy: no source code, file path, token, or repository snippet included.`;
+  return `DeinsComplete Diagnostics\nExtension: ${version}\nVS Code: ${vscode.version}\nEnvironment: ${vscode.env.remoteName ?? "local"} / ${process.platform}\nLanguage: ${language}\nStatus: ${lifecycle.getState()}\nBackend: ${backend}\nAuthentication: ${authentication}\nQuality insights: ${qualityInsights ? "Enabled (privacy-safe metadata only)" : "Disabled"}\nLast request ID: ${streaming.lastRequestId ?? "none"}\nLast backend result: ${streaming.lastError ?? "ok"}\nRequests: ${stats.requested}\nCache hits: ${stats.cacheHits}\nNegative cache hits: ${stats.negativeCacheHits}\nCancelled: ${stats.cancelled}\nLatency\nAverage debounce: ${averageDebounce} ms\nAverage backend: ${averageBackend} ms\nAverage total: ${average} ms\nLast backend: ${streaming.lastDurationMs} ms\nCompletion outcomes (local only)\nShown: ${votes.shown}\nAccepted: ${votes.accepted}\nAcceptance: ${acceptance}%\nManual feedback: helpful ${votes.helpful}, not helpful ${votes.notHelpful}\nRepository Context\nFocus: ${repository.lastFocus}\nDependencies: ${repository.lastDependencies}\nLast files included: ${repository.lastFiles}\nLast chars: ${repository.lastCharacters}\nLast build time: ${repository.lastDurationMs} ms\nTimeouts: ${repository.timedOut}\nStreaming\nStarted: ${streaming.streamsStarted}\nSucceeded: ${streaming.streamsSucceeded}\nFallback: ${streaming.streamsFallback}\nAverage first chunk: ${ttfb} ms\nPrivacy: no source code, file path, token, or repository snippet included.`;
 }

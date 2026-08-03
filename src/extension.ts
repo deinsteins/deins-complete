@@ -20,6 +20,7 @@ import { AccountService } from "./account/accountService";
 import { completionFocus } from "./completion/contextComplexity";
 import { conflictingInlineCompletionExtensions } from "./completion/conflictDetection";
 import { showAccountCenter, showWelcome } from "./ui/extensionPanels";
+import { QualityReporter } from "./feedback/qualityReporter";
 
 export function activate(context: vscode.ExtensionContext): void {
   const logger = new Logger();
@@ -100,6 +101,7 @@ export function activate(context: vscode.ExtensionContext): void {
       completionAvailability = state === "ready" ? undefined : state;
     });
     const feedback = new FeedbackService(context.workspaceState);
+    const quality = new QualityReporter(config, backendClient, logger);
     let statusReset: ReturnType<typeof setTimeout> | undefined;
     const requests = new RequestManager(engine, config, (activity) => {
       if (statusReset !== undefined) clearTimeout(statusReset);
@@ -116,7 +118,7 @@ export function activate(context: vscode.ExtensionContext): void {
     }, (request) => feedback.debounceAdjustment(completionFocus(request)));
     const repositoryContext = new RepositoryContextBuilder(config);
     const autoImports = new AutoImportResolver();
-    const completionProvider = new DeinsCompleteInlineCompletionProvider(lifecycle, new ContextBuilder(config, undefined, getSafeFilePath), repositoryContext, requests, logger, autoImports, feedback, canComplete);
+    const completionProvider = new DeinsCompleteInlineCompletionProvider(lifecycle, new ContextBuilder(config, undefined, getSafeFilePath), repositoryContext, requests, logger, autoImports, feedback, quality, canComplete);
     statusBar.update(lifecycle.getState());
     void refreshAccountStatus();
     const accountRefresh = setInterval(() => void refreshAccountStatus(), 10 * 60 * 1000);
@@ -145,7 +147,7 @@ export function activate(context: vscode.ExtensionContext): void {
       vscode.languages.registerInlineCompletionItemProvider([{ scheme: "file" }, { scheme: "vscode-remote" }], completionProvider),
       vscode.commands.registerCommand("deinscomplete.accountCenter", () => showAccountCenter(account, refreshAccountStatus, logger)),
       vscode.commands.registerCommand("deinscomplete.welcome", () => showWelcome()),
-      ...registerCommands(config, lifecycle, logger, backendClient, requests, installation, repositoryContext, engine, feedback, autoImports, account, refreshAccountStatus, () => authenticate(new AbortController().signal)),
+      ...registerCommands(config, lifecycle, logger, backendClient, requests, installation, repositoryContext, engine, feedback, quality, autoImports, account, refreshAccountStatus, () => authenticate(new AbortController().signal)),
     );
     logger.info(`DeinsComplete activated version=${extensionVersion} backend=${safeBackendOrigin(config.getBackendUrl())}`);
   } catch (error) {
