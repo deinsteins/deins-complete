@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.15
+
+- Fixed production releases to run additive database migrations before restarting the API.
+- Fixed the Compose migration service to execute the migration binary instead of the API entrypoint.
+
 ## 0.1.14
 
 - Added opt-in, privacy-safe shown and accepted completion quality insights.

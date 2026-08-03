@@ -18,9 +18,10 @@ DATABASE_ENABLED=true
 DATABASE_URL=postgres://deinscomplete:<same-password>@postgres:5432/deinscomplete?sslmode=disable
 ```
 
-Use a hexadecimal password so it needs no URL escaping. After pulling the account-enabled API image, start the database, run the additive migration once, then start the API:
+Use a hexadecimal password so it needs no URL escaping. The release deployment script runs additive migrations before reconciling the API. For manual recovery, export the immutable image because Compose interpolation happens before container `env_file` loading:
 
 ```bash
+export DEINSCOMPLETE_API_IMAGE=ghcr.io/<owner>/<repository>/api:v0.1.15
 docker compose -f docker-compose.prod.yml up -d postgres redis
 docker compose -f docker-compose.prod.yml --profile maintenance run --rm migrate
 docker compose -f docker-compose.prod.yml up -d api caddy

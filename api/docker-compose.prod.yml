@@ -53,7 +53,8 @@ services:
   migrate:
     image: ${DEINSCOMPLETE_API_IMAGE:?set DEINSCOMPLETE_API_IMAGE in the deployment environment}
     env_file: .env
-    command: ["/deinscomplete-migrate", "up"]
+    entrypoint: ["/deinscomplete-migrate"]
+    command: ["up"]
     profiles: ["maintenance"]
     read_only: true
     security_opt:
