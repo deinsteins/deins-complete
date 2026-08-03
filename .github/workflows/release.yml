@@ -43,7 +43,15 @@ jobs:
           TAG: "${{ steps.release.outputs.tag }}"
         run: |
           git fetch --tags
-          ! git rev-parse -q --verify "refs/tags/$TAG"
+          existing="$(git rev-parse -q --verify "refs/tags/$TAG^{}" || true)"
+          if [[ -n "$existing" ]]; then
+            if [[ "$existing" != "$GITHUB_SHA" ]]; then
+              echo "::error::Tag $TAG already points to $existing. Bump package.json to a new version before releasing commit $GITHUB_SHA."
+              exit 1
+            fi
+            echo "Tag $TAG already points to this commit; continuing the release rerun."
+            exit 0
+          fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git tag -a "$TAG" -m "DeinsComplete $TAG"
